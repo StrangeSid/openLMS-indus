@@ -76,10 +76,10 @@ Open <http://localhost:8000> and sign in with your Indus LMS account, or choose 
 
 ### Offline snapshot (no server)
 
-1. Install [induslms-agent](https://github.com/StrangeSid/induslms-agent), which does the LMS API access, and log in once:
+1. Install the dependencies (they include [induslms-agent](https://github.com/StrangeSid/induslms-agent), which does the LMS API access) and log in once:
 
    ```bash
-   pip install induslms-agent
+   pip install -r requirements.txt
    induslms login you@school.example
    ```
 
@@ -96,20 +96,24 @@ Open <http://localhost:8000> and sign in with your Indus LMS account, or choose 
 > `web/data.js` and `web/files/` contain your personal school data. Both are in `.gitignore`. Never commit them or publish the `web/` folder with them inside.
 
 > [!TIP]
-> Some files return `403 Forbidden` during `--files`. These belong to classes you're not in, or teachers have restricted them. The Library marks them "View on LMS only".
+> Some files return `403 Forbidden`. These belong to classes you're not in, or teachers have restricted them. openLMS links those to Indus LMS instead.
 
 ## How it works
 
 ```
-Browser ──► openlms/app.py ─────────────► Indus LMS API
+Browser ──► openlms/app.py ─────────────► Indus LMS API (read only)
 web/*.html   sign-in, sessions, token       api.induslms.com
-             refresh, /data.js, file proxy
-                   │
-                   └─ openlms/data.py: fetches in parallel via induslms-agent and
-                      shapes the result into the window.LMS object the pages render
+   │         refresh, /data.js, file proxy
+   │               │
+   │               └─ openlms/data.py: fetches in parallel via induslms-agent and
+   │                  shapes the result into the window.LMS object the pages render
+   │
+   └── Submit / Take test / Messaging ──► Indus LMS web app (induslms.com)
 ```
 
 Every page loads `data.js`. The server answers it with the signed-in student's live data, or sends them to the sign-in page. Without the server (the offline snapshot or the demo), `data.js` is a static file or falls back to the demo data. The pages work the same either way.
+
+Action buttons link to the matching Indus LMS page, using the same `?subject=…&course_id=…` links the LMS's own calendar uses, so students finish the task there.
 
 The app sorts each assignment into one of three states:
 
@@ -122,23 +126,31 @@ The app sorts each assignment into one of three states:
 ## Project structure
 
 ```
+openlms/
+  app.py              FastAPI server: sign-in, sessions, live data, file proxy, demo mode
+  data.py             Fetch and shape LMS data (shared with the exporter)
 web/
+  login.html          Sign-in page (server mode)
   index.html          Home: Upcoming / Done / Late assignments
   class.html          Per-class page (?c=<subject>&tab=stream|work|files)
   planner.html        Calendar, deadlines, attendance
   library.html        All shared files
   progress.html       Results, completion, updates feed
   assets/
-    app.js            Shared helpers, sidebar, assignment states
+    app.js            Shared helpers, sidebar, assignment states, LMS links
     app.css           Design tokens and layout
     data.example.js   Synthetic demo data
-  login.html          Sign-in page (server mode)
-openlms/
-  app.py              FastAPI server: sign-in, sessions, live data, file proxy
-  data.py             Fetch and shape LMS data (shared with the exporter)
 tools/export.py       Offline snapshot to web/data.js
-tests/                Unit tests (python3 -m unittest discover -s tests)
+tests/                Unit tests
+docs/                 README screenshot
 FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
+```
+
+Run the tests with:
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m unittest discover -s tests
 ```
 
 ## Roadmap

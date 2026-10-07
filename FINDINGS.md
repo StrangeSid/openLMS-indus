@@ -122,10 +122,12 @@ Frontend keeps original detail URLs underneath every row — wrapper never re-im
 
 ## 6. Open items before build
 
-- [ ] Confirm TODO includes Learning Tasks + resources with dates, or tasks only?
-- [ ] Grade-group display: drop entirely or keep as subtitle (`Computer Science-G11-Anitha`)?
-- [ ] Token refresh: server-side session vs. reusing `lms.py` file cache?
-- [ ] Scope: read-only wrapper v1 (recommended) — no submissions, no mark-read.
+Resolved in v0.2.0 (October 2026):
+
+- [x] TODO includes Learning Tasks: yes, alongside EOL, FA and SA. Resources stay in the Library and class pages.
+- [x] Grade-group display: dropped. Classes are listed by subject in the sidebar.
+- [x] Token refresh: server-side, per-student in-memory sessions (`openlms/app.py`), refreshed shortly before expiry.
+- [x] Scope: read-only. Submissions, tests, messaging and mark-read link out to the matching Indus LMS page.
 
 ---
-*Teams finds the wrapper by opening this file. Next step on approval: scaffold `backend/` (FastAPI aggregator) + `frontend/` (Next.js Today/Assignments pages) reusing `~/induslms-agent/lms.py` logic.*
+*Built as `openlms/` (FastAPI) + `web/` (static pages) reusing induslms-agent's `lms.py`. See the README.*
