@@ -83,7 +83,8 @@ function open(r) {
     <span class="pill" style="background:${r.kind.color};color:#fff;align-self:flex-start">${r.kind.label}</span>
     <h3 style="font-size:18px">${esc(r.title)}</h3>
     <dl><dt>Subject</dt><dd>${esc(titleCase(r.subject))}</dd><dt>Folder</dt><dd>${esc(r.folder || '—')}</dd><dt>Teacher</dt><dd>${esc(r.teacher || '—')}</dd><dt>File</dt><dd style="word-break:break-all">${esc(r.name)}</dd></dl>
-    ${r.path ? `<a class="btn" style="text-align:center" href="${encodeURI(r.path)}" target="_blank">Open file</a>` : `<span class="muted" style="font-size:12px">Not downloaded yet</span>`}</div>`;
+    ${r.path ? `<a class="btn" style="text-align:center" href="${encodeURI(r.path)}" target="_blank">Open file</a>` : ''}
+    ${extLink(lmsUrl(courseFor(r.subject)?.id ? `/courses/${courseFor(r.subject).id}/resources` : '/resources'), 'View on Indus LMS')}</div>`;
   d.classList.add('open');
   document.getElementById('x').onclick = () => d.classList.remove('open');
 }

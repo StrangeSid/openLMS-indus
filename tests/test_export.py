@@ -23,11 +23,14 @@ fake.eol_tests = lambda tok, tid: {"results": [{
     "total_marks": "5", "teacher_name": "T. Teacher", "assigned_at": "2026-10-01T00:00:00Z",
     "available_until": "2026-10-09T00:00:00Z", "available_from": "2026-10-01T00:00:00Z",
     "submitted_at": None, "availability_status": "active"}]}
-fake.assessments = lambda tok: {"results": [{
+fake.assessments = lambda tok, params=None: {"count": 1, "results": [] if (params or {}).get("assessment_type") == "SA" else [{
     "status": "graded", "marks": "8", "total_marks": "10", "submitted_at": "2026-10-02T00:00:00Z",
     "assigned_at": "2026-10-01T00:00:00Z",
     "assessment": {"title": "FA1", "subject": "Physics", "assessment_type": "FA", "category": None,
                    "due_date": "2026-10-03T00:00:00Z", "teacher_name": "T. Teacher"}}]}
+fake.api_get_json = lambda tok, path, params=None: [
+    {"id": "t1", "title": "Lab report", "subject": "Physics", "due_date": "2026-10-12T00:00:00Z", "status": "assigned"}
+] if path.endswith("/assignments/student/list/") else {}
 fake.notifications = lambda tok, tid, limit: {"unread_count": 1, "results": [
     {"title": "N", "message": "m", "type": "fa", "actor_name": "T", "created_at": "2026-10-01", "is_read": False}]}
 fake.attendance = lambda tok: {"total_sessions": 2, "present": 1, "absent": 1, "late": 0, "percentage": 50.0,
@@ -65,10 +68,23 @@ class ExportTest(unittest.TestCase):
         self.assertEqual([c["title"] for c in data["courses"]], ["Physics"])
         self.assertEqual(data["eol"][0]["due"], "2026-10-09T00:00:00Z")
         self.assertEqual(data["assessments"][0]["submitted"], "2026-10-02T00:00:00Z")
+        self.assertEqual(data["assessments"][0]["type"], "FA")
+        self.assertEqual(data["tasks"][0]["title"], "Lab report")
+        self.assertEqual(data["tasks"][0]["due"], "2026-10-12T00:00:00Z")
+        self.assertEqual(data["courses"][0]["id"], None)
         self.assertEqual(len(data["attendance"]["records"]), 1)
         self.assertEqual(data["announcements"][0]["message"], "Hi all")
         self.assertEqual(data["resources"], [{"title": "Notes", "name": "notes.pdf", "subject": "Physics",
                                               "teacher": "T", "folder": None}])
+
+    def test_failed_section_does_not_break_build(self):
+        self.assertEqual(lmsdata.safe(lambda: {"detail": "Not found."}, []), [])
+        self.assertEqual(lmsdata.safe(lambda: {"status": 500, "text": "oops"}, {}), {})
+        self.assertEqual(lmsdata.safe(lambda: 1 / 0, []), [])
+        self.assertEqual(lmsdata.safe(lambda: {"status": "ok", "results": [1]}, []), {"status": "ok", "results": [1]})
+        self.assertEqual(lmsdata.results({"results": [1, 2]}), [1, 2])
+        self.assertEqual(lmsdata.results([3]), [3])
+        self.assertEqual(lmsdata.results(None), [])
 
     def test_clean_name(self):
         self.assertEqual(lmsdata.clean_name('a/b:c?'), "a_b_c_")

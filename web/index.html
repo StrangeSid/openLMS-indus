@@ -25,6 +25,7 @@
   .row .chip { width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
   .row b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .meta { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .row code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: var(--canvas); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--ink-2); }
   .row .right { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
   .empty { padding: 48px 18px; text-align: center; color: var(--muted); font-weight: 600; }
   aside { display: flex; flex-direction: column; gap: 20px; }
@@ -106,10 +107,10 @@ function render() {
     const g = groupOf(a), s = subj(a.subject);
     if (g !== last) { html += `<div class="group">${esc(g)}</div>`; last = g; }
     const detail = tab === 'done' ? `Turned in ${fmtDate(a.submitted || a.assigned)}` : a.due ? `Due ${fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' })}, ${fmtTime(a.due)}` : `Set ${fmtDate(a.assigned)}`;
-    html += `<a class="row" href="class.html?c=${s.key}"><span class="edge" style="background:${t.edge}"></span>
-      <span class="chip" style="background:${s.c2};color:${s.c1}">${esc(s.short.slice(0, 2))}</span>
-      <div style="min-width:0"><b>${esc(a.title)}</b><div class="meta">${esc(s.short)} · ${esc(a.kind)} · ${detail}</div></div>
-      <div class="right">${statusPill(a)}</div></a>`;
+    html += `<div class="row"><span class="edge" style="background:${t.edge}"></span>
+      <a class="chip" href="class.html?c=${s.key}" title="Open ${esc(s.short)}" style="background:${s.c2};color:${s.c1}">${esc(s.short.slice(0, 2))}</a>
+      <div style="min-width:0"><b>${esc(a.title)}</b><div class="meta">${esc(s.short)} · ${esc(a.kind)} · ${detail}${a.testId ? ` · Test ID <code>${esc(a.testId)}</code>` : ''}</div></div>
+      <div class="right">${statusPill(a)}${actionFor(a)}</div></div>`;
   }
   document.getElementById('list').innerHTML = html || `<div class="empty">${tab === 'late' ? 'Nothing late. Nice work.' : tab === 'upcoming' ? 'No upcoming assignments.' : 'Nothing turned in yet.'}</div>`;
 }

@@ -41,6 +41,7 @@
   .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
   .file { display: flex; gap: 10px; align-items: center; padding: 12px; }
   a.file:hover { border-color: var(--brand); }
+  .task .ext { margin-left: 4px; }
   .ftype { width: 38px; height: 44px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: end center; padding-bottom: 6px; flex: none; }
   .file b { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
@@ -78,19 +79,19 @@ function work_() {
   const list = work.filter(a => a.state === seg).sort((a, b) => new Date(a.due || a.assigned) - new Date(b.due || b.assigned));
   if (seg !== 'upcoming') list.reverse();
   return `<div class="seg">${['upcoming', 'done', 'late'].map(s => `<button data-seg="${s}" class="${seg === s ? 'on' : ''}">${s[0].toUpperCase() + s.slice(1)} · ${count(s)}</button>`).join('')}</div>
-    <div class="card">${list.map(a => `<div class="task"><div><b>${esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}</small></div>${statusPill(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
+    <div class="card">${list.map(a => `<div class="task"><div><b>${esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}${a.testId ? ' · Test ID ' + esc(a.testId) : ''}</small></div>${statusPill(a)}${actionFor(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
 }
 function resources() {
   const folders = {};
   files.filter(f => !q || `${f.title} ${f.folder}`.toLowerCase().includes(q)).forEach(f => (folders[f.folder || 'General'] ||= []).push(f));
   return Object.entries(folders).map(([f, list]) => `<div class="folder"><h3>${icon('files', 16)} ${esc(f)} <span class="pill grey">${list.length}</span></h3><div class="files">${list.map(x => {
-    const k = fileKind(x.name), tag = x.path ? 'a' : 'div';
-    return `<${tag} class="card file" ${x.path ? `href="${encodeURI(x.path)}" target="_blank"` : 'title="Not available to download"'}><span class="ftype" style="background:${k.color}">${k.label}</span><div><b>${esc(x.title)}</b><span class="muted" style="font-size:12px">${x.path ? esc(x.teacher || '') : 'View on LMS only'}</span></div></${tag}>`;
+    const k = fileKind(x.name), href = x.path ? encodeURI(x.path) : lmsUrl(course.id ? `/courses/${course.id}/resources` : '/resources');
+    return `<a class="card file" href="${esc(href)}" target="_blank" rel="noopener"><span class="ftype" style="background:${k.color}">${k.label}</span><div><b>${esc(x.title)}</b><span class="muted" style="font-size:12px">${x.path ? esc(x.teacher || '') : 'Open on Indus LMS ↗'}</span></div></a>`;
   }).join('')}</div></div>`).join('') || '<div class="card empty">No shared files</div>';
 }
 function render() {
   document.getElementById('content').innerHTML = `
-    <div class="banner">${cover(course.title, 1000, 150)}<div class="over"><span class="pill" style="background:#fff;color:${S.c1}">${esc(D.programCode)}${course.level ? ' · ' + course.level : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div></div>
+    <div class="banner">${cover(course.title, 1000, 150)}<div class="over"><span class="pill" style="background:#fff;color:${S.c1}">${esc(D.programCode)}${course.level ? ' · ' + course.level : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div>${course.id ? `<div style="position:absolute;right:20px;top:18px">${extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS')}</div>` : ''}</div>
     <div class="ctabs">${[['stream', 'Stream', anns.length], ['work', 'Assignments', work.length], ['files', 'Resources', files.length]].map(([k, l, n]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}<span class="n">${n}</span></button>`).join('')}</div>
     ${tab === 'stream' ? stream() : tab === 'work' ? work_() : resources()}`;
 }

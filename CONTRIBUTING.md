@@ -4,7 +4,7 @@ Thanks for helping make the LMS easier for students. Bug reports, fixes and UI i
 
 ## Ground rules
 
-- **Be careful with actions.** Anything that changes school data (submitting, marking read, messaging) must need an explicit click from the student, must never run automatically, and must be tested against a stubbed LMS. Never store passwords.
+- **Actions stay on Indus LMS.** openLMS reads data and links to the LMS for anything that changes school data (submitting, uploading, tests, messaging). Don't add code that performs those actions until the school approves it. Never store passwords.
 - **No personal data in git.** Never commit `web/data.js`, `web/files/`, tokens, `.env` files, or screenshots and logs showing real names, emails or IDs. Use the demo data (`web/assets/data.example.js`) for screenshots, examples and tests. Both data paths are already in `.gitignore`; leave them there.
 - **API changes belong upstream.** Endpoints and auth live in [induslms-agent](https://github.com/StrangeSid/induslms-agent). If you need a new endpoint, add it there first, then use it from `tools/export.py`.
 - **Keep it build-free.** The web app is plain HTML, CSS and JavaScript with no bundler or framework. Talk about it in an issue before adding dependencies.

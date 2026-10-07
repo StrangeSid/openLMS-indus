@@ -62,9 +62,45 @@ const ICONS = {
   sparkle: '<path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  message: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  route: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>',
+  report: '<path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M9 15v2M12 12v5M15 9v8"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17v.5"/>',
 };
 function icon(name, size = 20, extra = '') {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICONS[name]}</svg>`;
+}
+
+// Actions (submitting, tests, messaging) happen on the real LMS; openLMS links to the exact page.
+const LMS = 'https://induslms.com';
+const LMS_PAGES = [
+  ['message', 'Messaging', '/messaging'],
+  ['shield', 'School policies', '/school-policies'],
+  ['route', 'Learning pathway', '/student-learning-pathway'],
+  ['report', 'Progress report', '/studentprogressreport'],
+  ['help', 'Help & support', '/help'],
+];
+const lmsUrl = path => LMS + (path?.startsWith('/') ? path : '/' + (path || ''));
+function courseFor(subject) {
+  const key = subj(subject).key;
+  return D.courses.find(c => subj(c.title).key === key);
+}
+function lmsLinkFor(kind, subject) {
+  const q = new URLSearchParams();
+  if (subject && subject.toLowerCase() !== 'general') q.set('subject', subject);
+  const course = courseFor(subject);
+  if (course?.id) q.set('course_id', course.id);
+  const base = kind === 'task' ? '/studentassignment' : `/assignments/test/${kind}`;
+  return lmsUrl(q.toString() ? `${base}?${q}` : base);
+}
+const extLink = (href, label, cls = 'btn ghost') =>
+  `<a class="${cls} ext" href="${esc(href)}" target="_blank" rel="noopener">${label} ${icon('external', 13)}</a>`;
+function actionFor(a) {
+  if (a.state === 'done') return extLink(a.link, 'View');
+  if (a.type === 'eol') return extLink(a.link, a.state === 'late' ? 'Open' : 'Take test', a.state === 'late' ? 'btn ghost' : 'btn');
+  return extLink(a.link, a.state === 'late' ? 'Open' : 'Submit', a.state === 'late' ? 'btn ghost' : 'btn');
 }
 
 const LOGO = `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#E8A33D"/>
@@ -77,7 +113,10 @@ function sidebar(active, activeClass) {
     ${nav.map(([i, l, h, n]) => `<a href="${h}" class="nav ${active === i ? 'on' : ''}">${icon(i)}${l}${n ? `<span class="count">${n}</span>` : ''}</a>`).join('')}
     <h5>Classes</h5>
     ${D.courses.map(c => { const s = subj(c.title); return `<a class="cls ${activeClass === s.key ? 'on' : ''}" href="class.html?c=${s.key}" title="${esc(c.title)}"><i style="background:${s.c1}"></i><span>${esc(c.title)}</span></a>`; }).join('')}
-    ${D.live ? `<button class="nav signout" onclick="signOut()">${icon('logout')}Sign out</button>` : ''}
+    <h5>On Indus LMS</h5>
+    ${LMS_PAGES.map(([i, l, p]) => `<a class="cls lmslink" href="${lmsUrl(p)}" target="_blank" rel="noopener">${icon(i, 16)}<span>${l}</span>${icon('external', 12)}</a>`).join('')}
+    ${D.live ? `<button class="nav signout" onclick="signOut()">${icon('logout')}Sign out</button>`
+      : window.OPENLMS_DEMO ? `<button class="nav signout" onclick="signOut()">${icon('logout')}Exit demo</button>` : ''}
   </nav>`;
 }
 function topbar(placeholder = 'Search assignments, classes, files…') {
@@ -120,7 +159,7 @@ function fileKind(name) {
   return { label: (ext || 'FILE').slice(0, 4).toUpperCase(), color: '#84909C' };
 }
 
-// Lesson checks + FA/SDL tasks, each classified as:
+// Lesson checks, FA/SA tests and learning tasks, each classified as:
 //   done      submitted or graded (`lateSubmit` if after the deadline)
 //   late      deadline passed with no submission
 //   upcoming  open or not yet open
@@ -128,16 +167,21 @@ let _assignments;
 function assignments() {
   if (_assignments) return _assignments;
   const eol = D.eol.map(e => ({
-    kind: 'Lesson check', title: e.topic && e.topic !== e.title ? `${e.title} · ${e.topic}` : e.title, subject: e.subject,
+    type: 'eol', kind: 'Lesson check', title: e.topic && e.topic !== e.title ? `${e.title} · ${e.topic}` : e.title, subject: e.subject,
     status: e.status, due: has(e.due) ? e.due : null, opens: e.opens, assigned: e.assigned, submitted: has(e.submitted) ? e.submitted : null,
-    score: e.score, total: e.total, teacher: e.teacher, scheduled: e.availability === 'scheduled',
+    score: e.score, total: e.total, teacher: e.teacher, scheduled: e.availability === 'scheduled', testId: has(e.testId) ? e.testId : null,
   }));
-  const fa = D.assessments.map(a => ({
-    kind: [a.type, a.category].filter(has).join(' · ') || 'Task', title: a.title, subject: a.subject,
+  const tests = D.assessments.map(a => ({
+    type: (a.type || 'fa').toLowerCase() === 'sa' ? 'sa' : 'fa', kind: [a.type, a.category].filter(has).join(' · ') || 'Task', title: a.title, subject: a.subject,
     status: a.status, due: has(a.due) ? a.due : null, assigned: a.assigned, submitted: has(a.submitted) ? a.submitted : null,
     score: a.marks, total: a.total, teacher: a.teacher,
   }));
-  _assignments = [...fa, ...eol].map(a => {
+  const learning = (D.tasks || []).map(t => ({
+    type: 'task', kind: 'Learning task', title: t.title, subject: t.subject, status: t.status,
+    due: has(t.due) ? t.due : null, assigned: t.assigned, submitted: has(t.submitted) ? t.submitted : null, teacher: t.teacher,
+  }));
+  _assignments = [...tests, ...learning, ...eol].map(a => {
+    a.link = lmsLinkFor(a.type, a.subject);
     const done = !!a.submitted || /graded|submitted|completed|evaluated/i.test(a.status || '');
     const pastDue = a.due && new Date(a.due) < TODAY;
     a.state = done ? 'done' : pastDue ? 'late' : 'upcoming';

@@ -22,19 +22,21 @@ Indus LMS spreads a student's work across 10 dashboard cards. A single subject k
 
 openLMS puts all of it on one screen. Every assignment from every class is sorted into **Upcoming**, **Done** and **Late**, and each class gets one page with its posts, work and files.
 
-openLMS is a wrapper: it signs in to Indus LMS as you and talks to it live. The goal is full parity with the original LMS, so anything you can do there you can do here. See the [roadmap](#roadmap) for what's covered so far.
+openLMS signs in to Indus LMS as you and reads your data live. Anything that changes school data, such as submitting work, uploading files, taking tests or messaging, still happens on Indus LMS. openLMS takes you straight to the exact page with one click.
 
 > [!NOTE]
 > openLMS is an unofficial client. Your password is passed to Indus LMS once to sign you in and is never stored.
 
 ## Features
 
-- **One assignments list.** Lesson checks, FA and SDL tasks are merged into Upcoming, Done and Late, with class filtering, sorting and search.
+- **One assignments list.** Lesson checks, FA and SA tests, and learning tasks are merged into Upcoming, Done and Late, with class filtering, sorting and search.
+- **One click to act.** Every assignment has a *Submit* or *Take test* button that opens the matching page on Indus LMS. EOL tests show their test ID.
 - **A page for each class.** Each class has a stream of announcements, its assignments split by status, and shared resources grouped by folder.
 - **Planner.** A month calendar shows school events and deadlines, coloured by status, plus your attendance.
 - **Library.** Every shared file in one place, filterable by subject and type. You can optionally download them so they open offline.
 - **Progress.** Graded results, completion per subject, and one feed of notifications and announcements.
 - **Live, per-student sessions.** Each student signs in with their own account. Tokens refresh automatically, and files stream straight from the LMS.
+- **Demo mode.** *Explore with demo data* on the sign-in page shows the full app with made-up data, which is handy for presentations.
 - **No build step.** The front end is plain HTML, CSS and JavaScript, and works on desktop and phones.
 
 ## Getting started
@@ -61,7 +63,7 @@ pip install -r requirements.txt
 uvicorn openlms.app:app --port 8000
 ```
 
-Open <http://localhost:8000> and sign in with your Indus LMS account.
+Open <http://localhost:8000> and sign in with your Indus LMS account, or choose **Explore with demo data**.
 
 > [!IMPORTANT]
 > If you host openLMS for other students, serve it over **HTTPS only** (for example behind Caddy or nginx). Passwords travel through the server on sign-in. Sessions are kept in memory, so restarting the server signs everyone out.
@@ -141,12 +143,10 @@ FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
 
 ## Roadmap
 
-- [x] Assignments (lesson checks, FA, SDL), classes, resources, announcements, calendar, attendance, notifications
+- [x] Assignments (lesson checks, FA and SA tests, learning tasks), classes, resources, announcements, calendar, attendance, notifications
 - [x] Live sign-in with per-student sessions and a file proxy
-- [ ] SA tests and Learning Tasks
-- [ ] Progress reports, messaging, learning pathway, school policies
-- [ ] Actions: mark notifications read, submit work and upload files, message teachers
-- [ ] Taking tests (proctored, so this needs care)
+- [x] One-click links to Indus LMS for submitting, tests, messaging, policies, learning pathway and progress reports
+- [ ] Doing those actions inside openLMS. This needs the school's approval and official API access first.
 
 ## Credits
 

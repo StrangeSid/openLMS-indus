@@ -21,7 +21,7 @@ from pathlib import Path
 import lms
 import requests
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -29,8 +29,11 @@ from openlms.data import build
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 COOKIE = "openlms_sid"
+DEMO_COOKIE = "openlms_demo"
+LMS_WEB = "https://induslms.com"
 SESSION_IDLE = 12 * 3600
 DATA_TTL = int(os.environ.get("OPENLMS_DATA_TTL", "300"))
+WARM_ON_LOGIN = True
 LOGIN_LIMIT = (10, 600)  # attempts per window (seconds), per client IP
 UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
 
@@ -43,6 +46,7 @@ class Session:
         self.seen = time.time()
         self.data: tuple[float, dict] | None = None
         self.lock = threading.Lock()
+        self.build_lock = threading.Lock()
 
 
 class Store:
@@ -96,6 +100,26 @@ def fresh(s: Session) -> str:
         body = r.json()
         s.access, s.refresh = body["access"], body.get("refresh", s.refresh)
         return s.access
+
+
+def live_data(s: Session, refresh: bool = False) -> dict:
+    """Build (or reuse) the student's data; concurrent requests wait for one build."""
+    with s.build_lock:
+        if refresh or not s.data or time.time() - s.data[0] > DATA_TTL:
+            s.data = (time.time(), build(fresh(s), s.tenant, live=True))
+        return s.data[1]
+
+
+def warm(s: Session) -> None:
+    if WARM_ON_LOGIN:
+        threading.Thread(target=lambda: _quiet(live_data, s), daemon=True).start()
+
+
+def _quiet(fn, *args) -> None:
+    try:
+        fn(*args)
+    except Exception:
+        pass
 
 
 def current(request: Request) -> tuple[str | None, Session | None]:
@@ -156,6 +180,9 @@ def login(creds: Credentials, request: Request, response: Response):
     response.set_cookie(COOKIE, sid, httponly=True, samesite="lax", max_age=SESSION_IDLE,
                         secure=request.url.scheme == "https" or os.environ.get("OPENLMS_SECURE_COOKIES") == "1")
     attempts.pop(ip, None)
+    response.delete_cookie(DEMO_COOKIE)
+    response.headers["Cache-Control"] = "no-store"
+    warm(sessions.get(sid))
     return {"name": user.get("full_name")}
 
 
@@ -164,7 +191,15 @@ def logout(request: Request, response: Response):
     sid, _ = current(request)
     sessions.drop(sid)
     response.delete_cookie(COOKIE)
+    response.delete_cookie(DEMO_COOKIE)
     return {"ok": True}
+
+
+@app.get("/api/demo")
+def demo():
+    response = RedirectResponse("../index.html", 303)
+    response.set_cookie(DEMO_COOKIE, "1", samesite="lax", max_age=3600)
+    return response
 
 
 @app.get("/api/session")
@@ -178,10 +213,10 @@ def data_js(request: Request, refresh: bool = False):
     headers = {"Cache-Control": "no-store"}
     _, s = current(request)
     if not s:
-        return Response("location.replace('login.html');", media_type="text/javascript", headers=headers)
-    if refresh or not s.data or time.time() - s.data[0] > DATA_TTL:
-        s.data = (time.time(), build(fresh(s), s.tenant, live=True))
-    return Response("window.LMS = " + json.dumps(s.data[1], default=str) + ";",
+        script = ("window.OPENLMS_DEMO = true;" if request.cookies.get(DEMO_COOKIE)
+                  else "location.replace('login.html');")
+        return Response(script, media_type="text/javascript", headers=headers)
+    return Response("window.LMS = " + json.dumps(live_data(s, refresh), default=str) + ";",
                     media_type="text/javascript", headers=headers)
 
 
@@ -193,12 +228,24 @@ def file_proxy(resource_id: str, file_id: str, request: Request):
     url = (f"{lms.API_BASE}/api/v1/tenants/{s.tenant}/resources/{resource_id}"
            f"/files/{file_id}/content/?disposition=inline")
     r = requests.get(url, headers=lms.get_auth_headers(fresh(s)), stream=True, timeout=60)
-    if r.status_code == 403:
-        raise HTTPException(403, "Your teacher hasn't made this file downloadable.")
     if not r.ok:
-        raise HTTPException(r.status_code, "Couldn't fetch this file from Indus LMS.")
+        message = ("Your teacher has restricted this file, so it can only be opened on Indus LMS."
+                   if r.status_code == 403 else "Indus LMS couldn't send this file right now.")
+        return unavailable(message, r.status_code)
     keep = {k: v for k, v in r.headers.items() if k.lower() in ("content-type", "content-length", "content-disposition")}
     return StreamingResponse(r.iter_content(65536), headers={**keep, "Cache-Control": "private, max-age=600"})
+
+
+def unavailable(message: str, status: int) -> HTMLResponse:
+    page = f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>File unavailable · openLMS</title><link rel="stylesheet" href="/assets/app.css">
+<body style="display:grid;place-items:center;min-height:100vh;padding:20px">
+<div class="card" style="max-width:420px;padding:28px;text-align:center">
+<h1 style="font-size:20px;margin-bottom:8px">This file isn't available here</h1>
+<p class="muted" style="font-weight:600">{message}</p>
+<a class="btn" href="{LMS_WEB}/resources" target="_blank" rel="noopener" style="display:inline-block;margin-top:12px">Open Indus LMS</a>
+</div></body>"""
+    return HTMLResponse(page, status_code=status)
 
 
 app.mount("/", StaticFiles(directory=WEB, html=True), name="web")

@@ -24,6 +24,14 @@
   form .btn[disabled] { opacity: .6; cursor: wait; }
   .error { display: none; background: var(--late-soft); color: #B23434; border-radius: 8px; padding: 10px 12px; font-weight: 600; font-size: 13px; }
   .note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-weight: 700; }
+  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .demo { text-align: center; padding: 11px; }
+  .loading { display: none; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .loading .spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--brand-soft); border-top-color: var(--brand); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  body.busy form { display: none; }
+  body.busy .loading { display: flex; }
   @media (max-width: 860px) { body { grid-template-columns: 1fr; } .panel { display: none; } }
 </style></head>
 <body>
@@ -40,8 +48,12 @@
     <label>School email<input type="email" name="email" autocomplete="username" required autofocus></label>
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit" id="submit">Sign in</button>
-    <p class="note">Your password is sent to Indus LMS to sign you in and is never stored by openLMS.</p>
+    <p class="note">Your password is sent to Indus LMS to sign you in and is never stored by openLMS.
+      Submitting work and taking tests still happen on Indus LMS; openLMS takes you to the right page.</p>
+    <div class="or"><span>or</span></div>
+    <a class="btn ghost demo" href="api/demo">Explore with demo data</a>
   </form>
+  <div class="loading" role="status"><span class="spin"></span><b id="hello">Signed in</b><span class="muted">Loading your classes and assignments…</span></div>
 </div>
 <script src="assets/app.js"></script>
 <script>
@@ -56,7 +68,14 @@ form.onsubmit = async e => {
   try {
     const r = await fetch('api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: form.email.value, password: form.password.value }) });
-    if (r.ok) { location.replace('index.html'); return; }
+    if (r.ok) {
+      const { name } = await r.json();
+      document.getElementById('hello').textContent = `Welcome, ${(name || '').split(' ')[0] || 'back'}`;
+      document.body.classList.add('busy');
+      await fetch('data.js', { cache: 'no-store' }).catch(() => {});
+      location.replace('index.html');
+      return;
+    }
     err.textContent = (await r.json().catch(() => ({}))).detail || 'Sign-in failed.';
   } catch { err.textContent = 'Couldn’t reach the server.'; }
   err.style.display = 'block';

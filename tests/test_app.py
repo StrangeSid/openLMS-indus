@@ -44,6 +44,7 @@ class AppTest(unittest.TestCase):
     def setUp(self):
         server.sessions = server.Store()
         server.attempts.clear()
+        server.WARM_ON_LOGIN = False
         self.client = TestClient(server.app, base_url="https://testserver")
         self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live: {"live": live, "tok": tok}).start()
         self.post = mock.patch.object(server.requests, "post").start()
@@ -118,7 +119,23 @@ class AppTest(unittest.TestCase):
         self.assertEqual(r.headers["content-type"], "application/pdf")
         self.assertNotIn("x-secret", r.headers)
         self.get.return_value = FakeResponse(403)
-        self.assertEqual(self.client.get("/api/files/abcdef12/abcdef34").status_code, 403)
+        restricted = self.client.get("/api/files/abcdef12/abcdef34")
+        self.assertEqual(restricted.status_code, 403)
+        self.assertIn("https://induslms.com", restricted.text)
+
+    def test_demo_mode(self):
+        r = self.client.get("/api/demo", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("openlms_demo=1", r.headers["set-cookie"])
+        self.assertIn("OPENLMS_DEMO", self.client.get("/data.js").text)
+        self.build.assert_not_called()
+        self.client.post("/api/logout")
+        self.assertIn("login.html", self.client.get("/data.js").text)
+
+    def test_sign_in_ends_demo(self):
+        self.client.get("/api/demo", follow_redirects=False)
+        self.sign_in()
+        self.assertTrue(self.client.get("/data.js").text.startswith("window.LMS = "))
 
 
 if __name__ == "__main__":
