@@ -1,0 +1,9 @@
+# Personal LMS data written by tools/export.py
+web/data.js
+web/files/
+
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store

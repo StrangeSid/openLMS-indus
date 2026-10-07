@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Planner · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  main { padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; max-width: 1400px; }
+  .cal { padding: 18px; }
+  .calhead { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .calhead h2 { font-size: 20px; font-weight: 800; margin-right: auto; }
+  .calnav { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; }
+  .legend { display: flex; gap: 14px; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 12px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .dow { padding: 8px; font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--canvas); }
+  .day { min-width: 0; min-height: 104px; padding: 6px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+  .day.out { background: #FBFBFD; color: var(--muted); }
+  .day.off { background: #F7F8F8; }
+  .num { font-size: 12px; font-weight: 800; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; }
+  .today .num { background: var(--brand); color: #fff; }
+  .ev { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev.school { background: var(--brand-soft); color: #0B5A54; }
+  .ev.due { background: var(--accent-soft); color: #9A6514; }
+  .ev.late { background: var(--late-soft); color: #B23434; }
+  .ev.done { background: var(--done-soft); color: #23714A; text-decoration: line-through; }
+  .ev.set { background: var(--info-soft); color: #2D58B3; }
+  .more { font-size: 11px; color: var(--muted); font-weight: 700; }
+  aside { display: flex; flex-direction: column; gap: 20px; }
+  .box { padding: 18px; }
+  .agenda .item { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .agenda .item:first-of-type { border-top: 0; }
+  .bar { width: 4px; border-radius: 2px; flex: none; }
+  .agenda b { font-size: 13px; display: block; }
+  .agenda span { font-size: 12px; color: var(--muted); }
+  .heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
+  .heat div { aspect-ratio: 1; border-radius: 4px; background: var(--canvas); }
+  .ring { display: flex; align-items: center; gap: 16px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; padding: 16px; } .day { min-height: 70px; } .ev { font-size: 0; height: 6px; padding: 0; } }
+</style></head>
+<body>
+<div class="with-side">
+  <main>
+    <section class="card cal">
+      <div class="calhead"><h2 id="mname"></h2><button class="calnav" id="prev"></button><button class="btn ghost" id="today">Today</button><button class="calnav" id="next"></button></div>
+      <div class="legend"><span><i style="background:var(--brand)"></i>School calendar</span><span><i style="background:var(--accent)"></i>Due</span><span><i style="background:var(--late)"></i>Missed</span><span><i style="background:var(--done)"></i>Done</span><span><i style="background:var(--info)"></i>Work set</span></div>
+      <div class="month" id="month"></div>
+    </section>
+    <aside>
+      <div class="card box agenda"><div class="section-title">Next 14 days</div><div id="agenda"></div></div>
+      <div class="card box"><div class="section-title">Attendance</div><div id="att"></div></div>
+    </aside>
+  </main>
+</div>
+<script src="data.js"></script>
+<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script src="assets/app.js"></script>
+<script>
+mountChrome('calendar', null, 'Search events and deadlines…');
+document.getElementById('prev').innerHTML = icon('chevron', 16, 'style="transform:rotate(180deg)"');
+document.getElementById('next').innerHTML = icon('chevron', 16);
+const key = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const byDay = {};
+const add = (d, e) => (byDay[d] ||= []).push(e);
+D.calendar.forEach(e => {
+  for (let t = new Date(e.date); key(t) <= (e.end || e.date); t.setDate(t.getDate() + 1)) add(key(t), { cls: 'school', label: e.label, off: /no_school|holiday/.test(e.type) });
+});
+assignments().forEach(t => {
+  if (t.due) add(key(t.due), { cls: t.state === 'done' ? 'done' : t.state === 'late' ? 'late' : 'due', label: `${subj(t.subject).short}: ${t.title}`, subject: t.subject });
+  else if (t.assigned) add(key(t.assigned), { cls: 'set', label: `${subj(t.subject).short}: ${t.title}`, subject: t.subject });
+});
+const thisMonth = () => new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+let view = thisMonth();
+function render() {
+  document.getElementById('mname').textContent = view.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const start = new Date(view); start.setDate(1 - ((view.getDay() + 6) % 7));
+  let html = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const k = key(d), evs = byDay[k] || [];
+    const cls = [d.getMonth() !== view.getMonth() && 'out', k === key(TODAY) && 'today', evs.some(e => e.off) && 'off'].filter(Boolean).join(' ');
+    html += `<div class="day ${cls}"><span class="num">${d.getDate()}</span>${evs.slice(0, 3).map(e => `<span class="ev ${e.cls}" title="${esc(e.label)}">${esc(e.label)}</span>`).join('')}${evs.length > 3 ? `<span class="more">+${evs.length - 3} more</span>` : ''}</div>`;
+  }
+  document.getElementById('month').innerHTML = html;
+}
+render();
+document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
+document.getElementById('next').onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
+document.getElementById('today').onclick = () => { view = thisMonth(); render(); };
+const agenda = [];
+for (let i = 0; i < 14; i++) { const d = new Date(TODAY); d.setDate(d.getDate() + i); (byDay[key(d)] || []).forEach(e => agenda.push({ ...e, d })); }
+const col = { school: '#0F766E', due: '#E8A33D', late: '#D64545', done: '#2E8B57', set: '#3B6FD8' };
+document.getElementById('agenda').innerHTML = agenda.slice(0, 9).map(e => `<div class="item"><span class="bar" style="background:${col[e.cls]}"></span><div><b>${esc(e.label)}</b><span>${fmtDate(e.d, { weekday: 'short', day: 'numeric', month: 'short' })}</span></div></div>`).join('') || '<span class="muted">Nothing scheduled</span>';
+const A = D.attendance, pct = +A.percentage, C = 2 * Math.PI * 34;
+const recs = A.records.slice().sort((a, b) => a.date.localeCompare(b.date));
+document.getElementById('att').innerHTML = `<div class="ring"><svg width="84" height="84" viewBox="0 0 84 84"><circle cx="42" cy="42" r="34" stroke="#ECECF1" stroke-width="10" fill="none"/><circle cx="42" cy="42" r="34" stroke="#2E8B57" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="${C * pct / 100} ${C}" transform="rotate(-90 42 42)"/><text x="42" y="47" text-anchor="middle" font-weight="800" font-size="16" fill="#1F1F2B">${pct}%</text></svg>
+  <div><b>${A.present}</b> of ${A.total_sessions} sessions present<br><span class="muted">${A.absent} absent · ${A.late} late</span></div></div>
+  <div class="heat">${recs.map(r => `<div title="${r.date} · ${r.status}" style="background:${r.status === 'present' ? '#2E8B57' : r.status === 'absent' ? '#D64545' : '#E8A33D'}"></div>`).join('')}</div>`;
+</script>
+</body></html>

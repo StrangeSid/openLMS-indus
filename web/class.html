@@ -1,0 +1,105 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Class · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  .content { padding: 24px 28px 40px; max-width: 1120px; }
+  .banner { height: 150px; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid var(--line); }
+  .banner .over { position: absolute; left: 24px; bottom: 18px; right: 160px; }
+  .banner h1 { font-size: 26px; font-weight: 800; }
+  .banner p { margin: 4px 0 0; font-weight: 700; color: var(--ink-2); }
+  .ctabs { display: flex; gap: 2px; margin: 18px 0; border-bottom: 1px solid var(--line); }
+  .ctabs button { border: 0; background: none; padding: 10px 14px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .ctabs button.on { color: var(--brand); border-color: var(--brand); }
+  .ctabs .n { font-size: 11px; background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; margin-left: 4px; color: var(--ink-2); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+  .post { padding: 18px; margin-bottom: 14px; }
+  .post header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .post header span { font-size: 12px; color: var(--muted); }
+  .post h3 { font-size: 15px; margin-bottom: 6px; }
+  .post p { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+  .attach { display: inline-flex; gap: 6px; align-items: center; margin-top: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; font-weight: 700; }
+  .info dl { display: grid; grid-template-columns: 80px 1fr; gap: 8px; margin: 0; font-size: 13px; }
+  .info dt { color: var(--muted); font-weight: 700; }
+  .info dd { margin: 0; font-weight: 600; }
+  .mini { display: flex; gap: 8px; margin-top: 14px; }
+  .mini div { flex: 1; text-align: center; padding: 10px 4px; border-radius: 8px; background: var(--canvas); }
+  .mini b { display: block; font-size: 18px; }
+  .mini span { font-size: 11px; font-weight: 700; color: var(--muted); }
+  .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 3px; margin-bottom: 14px; }
+  .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; color: var(--muted); }
+  .seg button.on { background: var(--brand-soft); color: var(--brand-ink); }
+  .task { display: flex; gap: 12px; align-items: center; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+  .task:last-child { border-bottom: 0; }
+  .task div { flex: 1; min-width: 0; }
+  .task b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task small { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .folder { margin-bottom: 18px; }
+  .folder h3 { font-size: 14px; display: flex; gap: 8px; align-items: center; margin-bottom: 10px; color: var(--ink-2); }
+  .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .file { display: flex; gap: 10px; align-items: center; padding: 12px; }
+  a.file:hover { border-color: var(--brand); }
+  .ftype { width: 38px; height: 44px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: end center; padding-bottom: 6px; flex: none; }
+  .file b { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .content { padding: 16px; } .banner .over { right: 24px; } }
+</style></head>
+<body>
+<div class="with-side">
+  <section class="content" id="content"></section>
+</div>
+<script src="data.js"></script>
+<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script src="assets/app.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const course = D.courses.find(c => subj(c.title).key === params.get('c')) || D.courses[0];
+const S = subj(course.title), K = S.key;
+document.title = `${course.title} · openLMS`;
+mountChrome(null, K, `Search in ${S.short}…`);
+
+const anns = D.announcements.filter(a => subj(a.subject).key === K);
+const work = assignments().filter(a => subj(a.subject).key === K);
+const files = D.resources.filter(r => subj(r.subject).key === K);
+let tab = params.get('tab') || 'stream', seg = 'upcoming', q = '';
+const count = st => work.filter(a => a.state === st).length;
+
+function stream() {
+  return `<div class="grid"><div>${anns.map(a => `
+    <article class="card post"><header><span class="avatar" style="background:${S.c1}">${initials(a.by)}</span><div><b>${esc(a.by)}</b><br><span>${fmtDate(a.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span></div></header>
+    <h3>${esc(a.title)}</h3><p>${esc(a.message)}</p>${a.files ? `<span class="attach">${icon('file', 14)} ${a.files} attachment${a.files > 1 ? 's' : ''}</span>` : ''}</article>`).join('') || '<div class="card empty">No posts in this class yet</div>'}</div>
+    <div class="card info" style="padding:16px;align-self:start"><div class="section-title">About this class</div>
+      <dl><dt>Teacher</dt><dd>${esc(course.teacher || '—')}</dd><dt>Level</dt><dd>${esc(course.level || '—')}</dd><dt>Code</dt><dd>${esc(course.code || '—')}</dd></dl>
+      <div class="mini"><div><b>${count('upcoming')}</b><span>Upcoming</span></div><div><b>${count('done')}</b><span>Done</span></div><div><b style="color:var(--late)">${count('late')}</b><span>Late</span></div></div></div></div>`;
+}
+function work_() {
+  const list = work.filter(a => a.state === seg).sort((a, b) => new Date(a.due || a.assigned) - new Date(b.due || b.assigned));
+  if (seg !== 'upcoming') list.reverse();
+  return `<div class="seg">${['upcoming', 'done', 'late'].map(s => `<button data-seg="${s}" class="${seg === s ? 'on' : ''}">${s[0].toUpperCase() + s.slice(1)} · ${count(s)}</button>`).join('')}</div>
+    <div class="card">${list.map(a => `<div class="task"><div><b>${esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}</small></div>${statusPill(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
+}
+function resources() {
+  const folders = {};
+  files.filter(f => !q || `${f.title} ${f.folder}`.toLowerCase().includes(q)).forEach(f => (folders[f.folder || 'General'] ||= []).push(f));
+  return Object.entries(folders).map(([f, list]) => `<div class="folder"><h3>${icon('files', 16)} ${esc(f)} <span class="pill grey">${list.length}</span></h3><div class="files">${list.map(x => {
+    const k = fileKind(x.name), tag = x.path ? 'a' : 'div';
+    return `<${tag} class="card file" ${x.path ? `href="${encodeURI(x.path)}" target="_blank"` : 'title="Not available to download"'}><span class="ftype" style="background:${k.color}">${k.label}</span><div><b>${esc(x.title)}</b><span class="muted" style="font-size:12px">${x.path ? esc(x.teacher || '') : 'View on LMS only'}</span></div></${tag}>`;
+  }).join('')}</div></div>`).join('') || '<div class="card empty">No shared files</div>';
+}
+function render() {
+  document.getElementById('content').innerHTML = `
+    <div class="banner">${cover(course.title, 1000, 150)}<div class="over"><span class="pill" style="background:#fff;color:${S.c1}">${esc(D.programCode)}${course.level ? ' · ' + course.level : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div></div>
+    <div class="ctabs">${[['stream', 'Stream', anns.length], ['work', 'Assignments', work.length], ['files', 'Resources', files.length]].map(([k, l, n]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}<span class="n">${n}</span></button>`).join('')}</div>
+    ${tab === 'stream' ? stream() : tab === 'work' ? work_() : resources()}`;
+}
+render();
+document.getElementById('content').onclick = e => {
+  const t = e.target.closest('[data-t]'), s = e.target.closest('[data-seg]');
+  if (t) { tab = t.dataset.t; render(); }
+  if (s) { seg = s.dataset.seg; render(); }
+};
+document.getElementById('q').oninput = e => { q = e.target.value.toLowerCase(); if (tab !== 'files') tab = 'files'; render(); };
+</script>
+</body></html>
