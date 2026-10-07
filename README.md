@@ -4,7 +4,7 @@
 
 # openLMS-indus
 
-**A simpler, read-only student view of Indus LMS. Answers "what's due?" in one click.**
+**A simpler student wrapper for Indus LMS. Answers "what's due?" in one click.**
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://www.python.org)
@@ -21,9 +21,6 @@
 Indus LMS spreads a student's work across 10 dashboard cards. A single subject keeps assignments in four separate places (EOL tests, FA, SA and learning tasks), with resources somewhere else. Finding everything that's due can take dozens of page loads. [`FINDINGS.md`](FINDINGS.md) documents the full audit.
 
 openLMS puts all of it on one screen. Every assignment from every class is sorted into **Upcoming**, **Done** and **Late**, and each class gets one page with its posts, work and files.
-
-> [!NOTE]
-> openLMS is **read-only by design**. It never submits work, marks notifications as read, or changes school data. It shows what the LMS already exposes to you.
 
 ## Features
 
@@ -76,7 +73,7 @@ Open <http://localhost:8000>.
 
 ```
 Indus LMS API ──► induslms-agent (lms.py) ──► tools/export.py ──► web/data.js ──► static pages
-                  auth + read-only calls      normalise + files    window.LMS      web/*.html
+                  auth + API calls             normalise + files    window.LMS      web/*.html
 ```
 
 `tools/export.py` calls induslms-agent, reduces the responses to the fields the UI needs, and writes them to `web/data.js`. Every page loads that file, falls back to the demo data if it's missing, and renders in the browser. There is no server-side code and nothing is sent anywhere.
@@ -109,6 +106,6 @@ FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
 
 ## Credits
 
-Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client, the endpoint reference and the read-only access patterns. That repo stays the source of truth for the API; this one is the UI layer.
+Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and endpoint reference. That repo stays the source of truth for the API layer.
 
 An unofficial student project. Not affiliated with or endorsed by the school or the Indus LMS vendor.
