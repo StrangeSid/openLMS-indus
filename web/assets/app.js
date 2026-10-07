@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+const D = window.LMS;
+const TODAY = new Date();
+
+const SUBJECTS = [
+  { key: 'math', match: /math/i, short: 'Maths', c1: '#5B4FCF', c2: '#ECEAFB', glyph: 'Σ' },
+  { key: 'phys', match: /physics/i, short: 'Physics', c1: '#2276B8', c2: '#E3EFF8', glyph: 'atom' },
+  { key: 'cs', match: /computer/i, short: 'Comp Sci', c1: '#2E8B57', c2: '#E2F3E9', glyph: '</>' },
+  { key: 'eng', match: /english/i, short: 'English', c1: '#B5476B', c2: '#F7E6EC', glyph: 'Aa' },
+  { key: 'bm', match: /business/i, short: 'Business', c1: '#C7811F', c2: '#FBF0DE', glyph: 'chart' },
+  { key: 'ger', match: /german/i, short: 'German', c1: '#36414D', c2: '#E9ECEF', glyph: 'Ä' },
+  { key: 'econ', match: /econ/i, short: 'Economics', c1: '#0F766E', c2: '#E3F2EF', glyph: '₹' },
+  { key: 'chem', match: /chem/i, short: 'Chemistry', c1: '#A2468F', c2: '#F5E6F2', glyph: 'flask' },
+  { key: 'bio', match: /bio/i, short: 'Biology', c1: '#5B8C2A', c2: '#ECF3E3', glyph: 'leaf' },
+  { key: 'hist', match: /history/i, short: 'History', c1: '#8C5A2B', c2: '#F3EBE2', glyph: '§' },
+  { key: 'ess', match: /environment/i, short: 'ESS', c1: '#3A8A5C', c2: '#E4F1E9', glyph: 'leaf' },
+  { key: 'french', match: /french/i, short: 'French', c1: '#3B6FD8', c2: '#E5EDFB', glyph: 'Fr' },
+];
+const FALLBACK = { key: 'other', short: 'General', c1: '#84909C', c2: '#EEF1F3', glyph: '•' };
+function subj(name) { return SUBJECTS.find(s => s.match.test(name || '')) || { ...FALLBACK, short: name || 'General' }; }
+
+function glyphSvg(g, color, x, y, size) {
+  const s = size;
+  if (g === 'atom') return `<g transform="translate(${x},${y})" fill="none" stroke="${color}" stroke-width="${s/14}"><ellipse rx="${s/2}" ry="${s/5}"/><ellipse rx="${s/2}" ry="${s/5}" transform="rotate(60)"/><ellipse rx="${s/2}" ry="${s/5}" transform="rotate(-60)"/><circle r="${s/12}" fill="${color}"/></g>`;
+  if (g === 'chart') return `<g transform="translate(${x - s/2},${y - s/2})" fill="${color}"><rect x="0" y="${s*.55}" width="${s*.22}" height="${s*.45}" rx="3"/><rect x="${s*.39}" y="${s*.3}" width="${s*.22}" height="${s*.7}" rx="3"/><rect x="${s*.78}" y="0" width="${s*.22}" height="${s}" rx="3"/></g>`;
+  if (g === 'flask') return `<g transform="translate(${x - s/2},${y - s/2})" fill="${color}"><path d="M${s*.35} 0h${s*.3}v${s*.35}l${s*.3} ${s*.55}a${s*.08} ${s*.08} 0 0 1-${s*.07} ${s*.1}h-${s*.76}a${s*.08} ${s*.08} 0 0 1-${s*.07}-${s*.1}l${s*.3}-${s*.55}z"/></g>`;
+  if (g === 'leaf') return `<g transform="translate(${x},${y}) rotate(-35)" fill="${color}"><path d="M0 ${-s/2} C ${s/2} ${-s/4}, ${s/2} ${s/4}, 0 ${s/2} C ${-s/2} ${s/4}, ${-s/2} ${-s/4}, 0 ${-s/2}z"/></g>`;
+  return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="Manrope, sans-serif" font-weight="800" font-size="${s}" fill="${color}">${g.replace('<', '&lt;').replace('>', '&gt;')}</text>`;
+}
+
+function cover(name, w = 320, h = 120) {
+  const s = subj(name);
+  let seed = [...(name || 'x')].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const off = rnd() * 60;
+  const stripes = Array.from({ length: 6 }, (_, i) => {
+    const x = off + i * (w / 5);
+    return `<path d="M${x} ${h} L${x + h * .9} 0 L${x + h * .9 + 18 + rnd() * 26} 0 L${x + 18 + rnd() * 26} ${h}Z" fill="${s.c1}" opacity="${0.05 + rnd() * 0.08}"/>`;
+  }).join('');
+  const grid = Array.from({ length: Math.ceil(w / 24) }, (_, i) => `<line x1="${i * 24}" y1="0" x2="${i * 24}" y2="${h}" stroke="${s.c1}" stroke-opacity=".06"/>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" style="display:block;width:100%;height:100%">
+    <rect width="${w}" height="${h}" fill="${s.c2}"/>${grid}${stripes}
+    <rect x="${w - 58 - h * .3}" y="${h / 2 - h * .3}" width="${h * .6}" height="${h * .6}" rx="${h * .14}" fill="#fff" opacity=".95"/>
+    ${glyphSvg(s.glyph, s.c1, w - 58, h / 2, h * .28)}
+  </svg>`;
+}
+
+const ICONS = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  tasks: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  files: '<path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',
+  progress: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/>',
+  file: '<path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/>',
+  megaphone: '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1zM17 8a5 5 0 0 1 0 8"/>',
+  check: '<path d="M5 12l5 5L20 7"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  chevron: '<path d="M9 6l6 6-6 6"/>',
+  sparkle: '<path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+};
+function icon(name, size = 20, extra = '') {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICONS[name]}</svg>`;
+}
+
+const LOGO = `<svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#E8A33D"/>
+  <path d="M7 11c3-3 6 3 9 0s6 3 9 0M7 16c3-3 6 3 9 0s6 3 9 0M7 21c3-3 6 3 9 0s6 3 9 0" fill="none" stroke="#12302D" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+
+function sidebar(active, activeClass) {
+  const open = assignments().filter(a => a.state !== 'done').length;
+  const nav = [['home', 'Home', 'index.html', open], ['calendar', 'Planner', 'planner.html'], ['files', 'Library', 'library.html'], ['progress', 'Progress', 'progress.html']];
+  return `<nav class="side"><a class="brand" href="index.html">${LOGO}<div>openLMS<small>${esc(D.program)} · ${esc(D.year)}</small></div></a>
+    ${nav.map(([i, l, h, n]) => `<a href="${h}" class="nav ${active === i ? 'on' : ''}">${icon(i)}${l}${n ? `<span class="count">${n}</span>` : ''}</a>`).join('')}
+    <h5>Classes</h5>
+    ${D.courses.map(c => { const s = subj(c.title); return `<a class="cls ${activeClass === s.key ? 'on' : ''}" href="class.html?c=${s.key}" title="${esc(c.title)}"><i style="background:${s.c1}"></i><span>${esc(c.title)}</span></a>`; }).join('')}
+  </nav>`;
+}
+function topbar(placeholder = 'Search assignments, classes, files…') {
+  return `<header class="topbar"><button class="menu-btn" onclick="document.body.classList.toggle('menu-open')" aria-label="Menu">${icon('menu')}</button>
+    <label class="search">${icon('search', 16)}<input placeholder="${placeholder}" id="q"></label><div style="flex:1"></div>
+    <a class="bell" href="progress.html" title="Updates">${icon('bell')}<b>${D.unread}</b></a><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
+}
+function mountChrome(active, activeClass, placeholder) {
+  const fav = document.createElement('link'); fav.rel = 'icon'; fav.href = 'data:image/svg+xml,' + encodeURIComponent(LOGO.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+  document.head.appendChild(fav);
+  document.body.insertAdjacentHTML('afterbegin', sidebar(active, activeClass));
+  document.querySelector('.with-side').insertAdjacentHTML('afterbegin', topbar(placeholder));
+}
+
+const initials = n => (n || '?').split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+const fmtDate = (d, opts = { day: 'numeric', month: 'short' }) => d ? new Date(d).toLocaleDateString('en-IN', opts) : '—';
+const fmtTime = d => d ? new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '';
+function ago(d) {
+  const m = Math.round((TODAY - new Date(d)) / 60000);
+  if (m < 60) return `${Math.max(m, 1)}m ago`;
+  if (m < 1440) return `${Math.round(m / 60)}h ago`;
+  return `${Math.round(m / 1440)}d ago`;
+}
+const daysUntil = d => Math.ceil((new Date(d) - TODAY) / 86400000);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const titleCase = s => (s || '').replace(/\b\w/g, c => c.toUpperCase()).replace(/\bAnd\b/g, 'and');
+const has = v => v != null && v !== 'None' && v !== '';
+function fileKind(name) {
+  const ext = (name || '').split('.').pop().toLowerCase();
+  if (ext === 'pdf') return { label: 'PDF', color: '#D64545' };
+  if (['doc', 'docx'].includes(ext)) return { label: 'DOC', color: '#3B6FD8' };
+  if (['ppt', 'pptx'].includes(ext)) return { label: 'PPT', color: '#C7811F' };
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return { label: 'XLS', color: '#2E8B57' };
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'heic'].includes(ext)) return { label: 'IMG', color: '#5B4FCF' };
+  if (['mp4', 'mov'].includes(ext)) return { label: 'VID', color: '#A2468F' };
+  return { label: (ext || 'FILE').slice(0, 4).toUpperCase(), color: '#84909C' };
+}
+
+// Lesson checks + FA/SDL tasks, each classified as:
+//   done      submitted or graded (`lateSubmit` if after the deadline)
+//   late      deadline passed with no submission
+//   upcoming  open or not yet open
+let _assignments;
+function assignments() {
+  if (_assignments) return _assignments;
+  const eol = D.eol.map(e => ({
+    kind: 'Lesson check', title: e.topic && e.topic !== e.title ? `${e.title} · ${e.topic}` : e.title, subject: e.subject,
+    status: e.status, due: has(e.due) ? e.due : null, opens: e.opens, assigned: e.assigned, submitted: has(e.submitted) ? e.submitted : null,
+    score: e.score, total: e.total, teacher: e.teacher, scheduled: e.availability === 'scheduled',
+  }));
+  const fa = D.assessments.map(a => ({
+    kind: [a.type, a.category].filter(has).join(' · ') || 'Task', title: a.title, subject: a.subject,
+    status: a.status, due: has(a.due) ? a.due : null, assigned: a.assigned, submitted: has(a.submitted) ? a.submitted : null,
+    score: a.marks, total: a.total, teacher: a.teacher,
+  }));
+  _assignments = [...fa, ...eol].map(a => {
+    const done = !!a.submitted || /graded|submitted|completed|evaluated/i.test(a.status || '');
+    const pastDue = a.due && new Date(a.due) < TODAY;
+    a.state = done ? 'done' : pastDue ? 'late' : 'upcoming';
+    a.lateSubmit = done && a.due && a.submitted && new Date(a.submitted) > new Date(a.due);
+    a.graded = /graded|evaluated/i.test(a.status || '') && has(a.score);
+    return a;
+  });
+  return _assignments;
+}
+const isDone = t => t.state === 'done';
+function statusPill(t) {
+  if (t.state === 'done') {
+    const base = t.graded ? `<span class="pill green">${icon('check', 12)} ${+t.score}/${+t.total}</span>` : `<span class="pill cyan">${icon('check', 12)} Turned in</span>`;
+    return t.lateSubmit ? `${base} <span class="pill red">Late</span>` : base;
+  }
+  if (t.state === 'late') return `<span class="pill red">${icon('alert', 12)} Missed · ${fmtDate(t.due)}</span>`;
+  if (t.scheduled) return `<span class="pill violet">Opens ${fmtDate(t.opens)}</span>`;
+  if (t.due) {
+    const n = daysUntil(t.due);
+    return `<span class="pill ${n <= 2 ? 'red' : 'amber'}">${icon('clock', 12)} Due ${n <= 0 ? 'today' : n === 1 ? 'tomorrow' : fmtDate(t.due)}</span>`;
+  }
+  return `<span class="pill amber">To do</span>`;
+}
