@@ -4,13 +4,13 @@
 
 # openLMS-indus
 
-**A simpler, read-only student view of Indus LMS. Answers "what's due?" in one click.**
+**A simpler front end for Indus LMS. Sign in with your school account and see everything that's due in one click.**
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://www.python.org)
 [![No build step](https://img.shields.io/badge/build-none-0F766E)](#getting-started)
 
-[Overview](#overview) • [Features](#features) • [Getting started](#getting-started) • [How it works](#how-it-works) • [Project structure](#project-structure)
+[Overview](#overview) • [Features](#features) • [Getting started](#getting-started) • [How it works](#how-it-works) • [Roadmap](#roadmap)
 
 <img src="docs/index.png" alt="openLMS home screen with upcoming, done and late assignments" width="860">
 
@@ -22,8 +22,10 @@ Indus LMS spreads a student's work across 10 dashboard cards. A single subject k
 
 openLMS puts all of it on one screen. Every assignment from every class is sorted into **Upcoming**, **Done** and **Late**, and each class gets one page with its posts, work and files.
 
+openLMS is a wrapper: it signs in to Indus LMS as you and talks to it live. The goal is full parity with the original LMS, so anything you can do there you can do here. See the [roadmap](#roadmap) for what's covered so far.
+
 > [!NOTE]
-> openLMS is **read-only by design**. It never submits work, marks notifications as read, or changes school data. It shows what the LMS already exposes to you.
+> openLMS is an unofficial client. Your password is passed to Indus LMS once to sign you in and is never stored.
 
 ## Features
 
@@ -32,7 +34,8 @@ openLMS puts all of it on one screen. Every assignment from every class is sorte
 - **Planner.** A month calendar shows school events and deadlines, coloured by status, plus your attendance.
 - **Library.** Every shared file in one place, filterable by subject and type. You can optionally download them so they open offline.
 - **Progress.** Graded results, completion per subject, and one feed of notifications and announcements.
-- **No build step.** The app is plain HTML, CSS and JavaScript, and works on desktop and phones.
+- **Live, per-student sessions.** Each student signs in with their own account. Tokens refresh automatically, and files stream straight from the LMS.
+- **No build step.** The front end is plain HTML, CSS and JavaScript, and works on desktop and phones.
 
 ## Getting started
 
@@ -48,7 +51,28 @@ python3 -m http.server 8000 --directory web
 
 Open <http://localhost:8000>.
 
-### Use your own data
+### Run the server
+
+The server signs students in and serves live data. You need Python 3.10+:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn openlms.app:app --port 8000
+```
+
+Open <http://localhost:8000> and sign in with your Indus LMS account.
+
+> [!IMPORTANT]
+> If you host openLMS for other students, serve it over **HTTPS only** (for example behind Caddy or nginx). Passwords travel through the server on sign-in. Sessions are kept in memory, so restarting the server signs everyone out.
+
+| Environment variable | Purpose |
+|---|---|
+| `OPENLMS_DATA_TTL` | Seconds to cache each student's data (default `300`) |
+| `OPENLMS_SECURE_COOKIES=1` | Force `Secure` cookies when TLS ends at a proxy |
+| `INDUSLMS_TENANT` | Fallback tenant ID if an account has none |
+
+### Offline snapshot (no server)
 
 1. Install [induslms-agent](https://github.com/StrangeSid/induslms-agent), which does the LMS API access, and log in once:
 
@@ -64,7 +88,7 @@ Open <http://localhost:8000>.
    python3 tools/export.py --files
    ```
 
-3. Serve `web/` as above and reload. Run the export again whenever you want fresh data.
+3. Serve `web/` with `python3 -m http.server 8000 --directory web` and reload. Run the export again whenever you want fresh data.
 
 > [!IMPORTANT]
 > `web/data.js` and `web/files/` contain your personal school data. Both are in `.gitignore`. Never commit them or publish the `web/` folder with them inside.
@@ -75,11 +99,15 @@ Open <http://localhost:8000>.
 ## How it works
 
 ```
-Indus LMS API ──► induslms-agent (lms.py) ──► tools/export.py ──► web/data.js ──► static pages
-                  auth + read-only calls      normalise + files    window.LMS      web/*.html
+Browser ──► openlms/app.py ─────────────► Indus LMS API
+web/*.html   sign-in, sessions, token       api.induslms.com
+             refresh, /data.js, file proxy
+                   │
+                   └─ openlms/data.py: fetches in parallel via induslms-agent and
+                      shapes the result into the window.LMS object the pages render
 ```
 
-`tools/export.py` calls induslms-agent, reduces the responses to the fields the UI needs, and writes them to `web/data.js`. Every page loads that file, falls back to the demo data if it's missing, and renders in the browser. There is no server-side code and nothing is sent anywhere.
+Every page loads `data.js`. The server answers it with the signed-in student's live data, or sends them to the sign-in page. Without the server (the offline snapshot or the demo), `data.js` is a static file or falls back to the demo data. The pages work the same either way.
 
 The app sorts each assignment into one of three states:
 
@@ -102,13 +130,26 @@ web/
     app.js            Shared helpers, sidebar, assignment states
     app.css           Design tokens and layout
     data.example.js   Synthetic demo data
-tools/export.py       Export your LMS data to web/data.js
+  login.html          Sign-in page (server mode)
+openlms/
+  app.py              FastAPI server: sign-in, sessions, live data, file proxy
+  data.py             Fetch and shape LMS data (shared with the exporter)
+tools/export.py       Offline snapshot to web/data.js
 tests/                Unit tests (python3 -m unittest discover -s tests)
 FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
 ```
 
+## Roadmap
+
+- [x] Assignments (lesson checks, FA, SDL), classes, resources, announcements, calendar, attendance, notifications
+- [x] Live sign-in with per-student sessions and a file proxy
+- [ ] SA tests and Learning Tasks
+- [ ] Progress reports, messaging, learning pathway, school policies
+- [ ] Actions: mark notifications read, submit work and upload files, message teachers
+- [ ] Taking tests (proctored, so this needs care)
+
 ## Credits
 
-Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client, the endpoint reference and the read-only access patterns. That repo stays the source of truth for the API; this one is the UI layer.
+Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and the endpoint reference. That repo stays the source of truth for the API; this one is the app layer.
 
 An unofficial student project. Not affiliated with or endorsed by the school or the Indus LMS vendor.

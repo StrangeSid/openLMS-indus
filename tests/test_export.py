@@ -43,16 +43,19 @@ fake.list_resources = lambda tok, tid, course, parent, page, size: {"results": [
      "parent_resource_id": None, "file_urls": [{"id": "x", "name": "notes.pdf"}]},
 ]}
 
-sys.modules["lms"] = fake
+sys.modules.setdefault("lms", fake)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import export  # noqa: E402
+from openlms import data as lmsdata  # noqa: E402
 
 
 class ExportTest(unittest.TestCase):
     def test_writes_data_js(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "data.js"
-            with mock.patch.object(sys, "argv", ["export.py", "--out", str(out)]):
+            with mock.patch.object(sys, "argv", ["export.py", "--out", str(out)]), \
+                    mock.patch.object(export, "lms", fake), mock.patch.object(lmsdata, "lms", fake):
                 export.main()
             text = out.read_text()
             self.assertTrue(text.startswith("window.LMS = "))
@@ -68,8 +71,8 @@ class ExportTest(unittest.TestCase):
                                               "teacher": "T", "folder": None}])
 
     def test_clean_name(self):
-        self.assertEqual(export.clean_name('a/b:c?'), "a_b_c_")
-        self.assertEqual(export.clean_name(None), "untitled")
+        self.assertEqual(lmsdata.clean_name('a/b:c?'), "a_b_c_")
+        self.assertEqual(lmsdata.clean_name(None), "untitled")
 
 
 if __name__ == "__main__":

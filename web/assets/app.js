@@ -61,6 +61,7 @@ const ICONS = {
   chevron: '<path d="M9 6l6 6-6 6"/>',
   sparkle: '<path d="M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
 };
 function icon(name, size = 20, extra = '') {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICONS[name]}</svg>`;
@@ -76,12 +77,17 @@ function sidebar(active, activeClass) {
     ${nav.map(([i, l, h, n]) => `<a href="${h}" class="nav ${active === i ? 'on' : ''}">${icon(i)}${l}${n ? `<span class="count">${n}</span>` : ''}</a>`).join('')}
     <h5>Classes</h5>
     ${D.courses.map(c => { const s = subj(c.title); return `<a class="cls ${activeClass === s.key ? 'on' : ''}" href="class.html?c=${s.key}" title="${esc(c.title)}"><i style="background:${s.c1}"></i><span>${esc(c.title)}</span></a>`; }).join('')}
+    ${D.live ? `<button class="nav signout" onclick="signOut()">${icon('logout')}Sign out</button>` : ''}
   </nav>`;
 }
 function topbar(placeholder = 'Search assignments, classes, files…') {
   return `<header class="topbar"><button class="menu-btn" onclick="document.body.classList.toggle('menu-open')" aria-label="Menu">${icon('menu')}</button>
     <label class="search">${icon('search', 16)}<input placeholder="${placeholder}" id="q"></label><div style="flex:1"></div>
     <a class="bell" href="progress.html" title="Updates">${icon('bell')}<b>${D.unread}</b></a><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
+}
+async function signOut() {
+  await fetch('api/logout', { method: 'POST' }).catch(() => {});
+  location.replace('login.html');
 }
 function mountChrome(active, activeClass, placeholder) {
   const fav = document.createElement('link'); fav.rel = 'icon'; fav.href = 'data:image/svg+xml,' + encodeURIComponent(LOGO.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));

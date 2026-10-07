@@ -1,0 +1,66 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<style>
+  body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--surface); }
+  .panel { background: #12302D; color: #C9D8D5; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; }
+  .panel .brand { padding: 0; font-size: 20px; }
+  .panel h2 { color: #fff; font-size: 30px; font-weight: 800; line-height: 1.2; max-width: 420px; }
+  .panel ul { padding: 0; list-style: none; margin: 24px 0 0; display: grid; gap: 12px; }
+  .panel li { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+  .panel li svg { color: var(--accent); flex: none; }
+  .panel small { color: #7E9C97; }
+  .form-wrap { display: grid; place-items: center; padding: 32px 20px; }
+  form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 16px; }
+  form h1 { font-size: 24px; font-weight: 800; }
+  form p { margin: 0; color: var(--muted); font-weight: 600; }
+  label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 13px; color: var(--ink-2); }
+  input { font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; outline: none; background: #fff; color: var(--ink); }
+  input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+  form .btn { padding: 12px; font-size: 15px; }
+  form .btn[disabled] { opacity: .6; cursor: wait; }
+  .error { display: none; background: var(--late-soft); color: #B23434; border-radius: 8px; padding: 10px 12px; font-weight: 600; font-size: 13px; }
+  .note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  @media (max-width: 860px) { body { grid-template-columns: 1fr; } .panel { display: none; } }
+</style></head>
+<body>
+<section class="panel">
+  <div class="brand" id="brand"></div>
+  <div><h2>Everything due, in one place.</h2>
+    <ul id="points"></ul></div>
+  <small>An unofficial student project. Not affiliated with the school or the Indus LMS vendor.</small>
+</section>
+<div class="form-wrap">
+  <form id="form" autocomplete="on">
+    <div><h1>Sign in</h1><p>Use your Indus LMS school account.</p></div>
+    <div class="error" id="error" role="alert"></div>
+    <label>School email<input type="email" name="email" autocomplete="username" required autofocus></label>
+    <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+    <button class="btn" type="submit" id="submit">Sign in</button>
+    <p class="note">Your password is sent to Indus LMS to sign you in and is never stored by openLMS.</p>
+  </form>
+</div>
+<script src="assets/app.js"></script>
+<script>
+document.getElementById('brand').innerHTML = `${LOGO}<div>openLMS</div>`;
+document.getElementById('points').innerHTML = ['Upcoming, done and late work across every class', 'One page per class: posts, work and files', 'Calendar, attendance and results at a glance']
+  .map(t => `<li>${icon('check', 18)}${t}</li>`).join('');
+const form = document.getElementById('form'), err = document.getElementById('error'), btn = document.getElementById('submit');
+form.onsubmit = async e => {
+  e.preventDefault();
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const r = await fetch('api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.email.value, password: form.password.value }) });
+    if (r.ok) { location.replace('index.html'); return; }
+    err.textContent = (await r.json().catch(() => ({}))).detail || 'Sign-in failed.';
+  } catch { err.textContent = 'Couldn’t reach the server.'; }
+  err.style.display = 'block';
+  btn.disabled = false; btn.textContent = 'Sign in';
+};
+</script>
+</body></html>
