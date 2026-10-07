@@ -4,7 +4,7 @@
 
 # openLMS-indus
 
-**A simpler front end for Indus LMS. Sign in with your school account and see everything that's due in one click.**
+**A student wrapper for Indus LMS.** Sign in with your school account and see everything that's due in one click.
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://www.python.org)
@@ -101,7 +101,7 @@ Open <http://localhost:8000> and sign in with your Indus LMS account, or choose 
 ## How it works
 
 ```
-Browser ──► openlms/app.py ─────────────► Indus LMS API (read only)
+Browser ──► openlms/app.py ─────────────► Indus LMS API
 web/*.html   sign-in, sessions, token       api.induslms.com
    │         refresh, /data.js, file proxy
    │               │
@@ -162,6 +162,9 @@ python3 -m unittest discover -s tests
 
 ## Credits
 
-Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and the endpoint reference. That repo stays the source of truth for the API; this one is the app layer.
+Frontend Developer: Arnav V. Reddy  
+Backend Developer: Siddhant Harsoda
 
-An unofficial student project. Not affiliated with or endorsed by the school or the Indus LMS vendor.
+Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and endpoint reference.
+
+An unofficial student project. Not affiliated with or endorsed by the Indus Trust or Indus International School.
