@@ -4,7 +4,7 @@
 
 # openLMS-indus
 
-**A simpler student wrapper for Indus LMS. Answers "what's due?" in one click.**
+**A student wrapper for Indus LMS.**
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](COPYING)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://www.python.org)
@@ -73,7 +73,7 @@ Open <http://localhost:8000>.
 
 ```
 Indus LMS API ──► induslms-agent (lms.py) ──► tools/export.py ──► web/data.js ──► static pages
-                  auth + API calls             normalise + files    window.LMS      web/*.html
+                  auth + API calls      normalise + files    window.LMS      web/*.html
 ```
 
 `tools/export.py` calls induslms-agent, reduces the responses to the fields the UI needs, and writes them to `web/data.js`. Every page loads that file, falls back to the demo data if it's missing, and renders in the browser. There is no server-side code and nothing is sent anywhere.
@@ -106,6 +106,9 @@ FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
 
 ## Credits
 
-Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and endpoint reference. That repo stays the source of truth for the API layer.
+Frontend Developer: Arnav V. Reddy  
+Backend Developer: Siddhant Harsoda
 
-An unofficial student project. Not affiliated with or endorsed by the school or the Indus LMS vendor.
+Built on **[StrangeSid/induslms-agent](https://github.com/StrangeSid/induslms-agent)**, which provides the reverse-engineered API client and endpoint reference.
+
+An unofficial student project. Not affiliated with or endorsed by the Indus Trust or Indus International School.
