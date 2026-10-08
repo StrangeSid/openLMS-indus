@@ -2,8 +2,14 @@
 web/data.js
 web/files/
 
+# Server-side session store (tokens) and optional secret — never commit
+.openlms-sessions.db
+.openlms-sessions.db-wal
+.openlms-sessions.db-shm
+.openlms-secret
+.env
+
 __pycache__/
 *.pyc
 .venv/
-.env
 .DS_Store

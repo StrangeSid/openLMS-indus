@@ -32,7 +32,7 @@ To work with your own data, see [Use your own data](README.md#use-your-own-data)
    - Shared helpers and assignment logic go in `web/assets/app.js`. Page-specific code stays in its page's `<script>`.
    - Colours and spacing come from the CSS variables in `web/assets/app.css`.
    - Escape any LMS text with `esc()` before inserting it into HTML.
-   - Python targets 3.10+. Server code lives in `openlms/` and uses only FastAPI and induslms-agent.
+   - Python targets 3.10+. Server code lives in `openlms/` and uses FastAPI, induslms-agent, stdlib SQLite for sessions, and optional `cryptography` for token encryption.
 4. Check your change on desktop and at phone width (about 375px), in demo mode.
 5. Run the tests:
 

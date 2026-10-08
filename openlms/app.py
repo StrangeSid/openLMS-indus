@@ -4,7 +4,9 @@
     uvicorn openlms.app:app --port 8000
 
 Passwords are forwarded to Indus LMS once and never stored. Each student's
-tokens live only in this process's memory, keyed by a random session cookie.
+tokens rest server-side in a SQLite file (0600, optional Fernet encryption
+via OPENLMS_SECRET_KEY), keyed by a random HttpOnly session cookie, so a
+restart no longer signs everyone out.
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ import base64
 import json
 import os
 import re
-import secrets
 import threading
 import time
 from pathlib import Path
@@ -26,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from openlms.data import build
+from openlms.sessions import Session, Store
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 COOKIE = "openlms_sid"
@@ -42,44 +44,7 @@ UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
 PUBLIC_HOSTS = {h.strip().lower() for h in os.environ.get("OPENLMS_PUBLIC_HOST", "").split(",") if h.strip()}
 
 
-class Session:
-    def __init__(self, access: str, refresh: str, tenant: str, user: dict):
-        self.access, self.refresh, self.tenant = access, refresh, tenant
-        self.name = user.get("full_name") or user.get("email")
-        self.email = user.get("email")
-        self.seen = time.time()
-        self.data: tuple[float, dict] | None = None
-        self.lock = threading.Lock()
-        self.build_lock = threading.Lock()
-
-
-class Store:
-    def __init__(self):
-        self._s: dict[str, Session] = {}
-        self._lock = threading.Lock()
-
-    def add(self, s: Session) -> str:
-        sid = secrets.token_urlsafe(32)
-        with self._lock:
-            self._s[sid] = s
-        return sid
-
-    def get(self, sid: str | None) -> Session | None:
-        with self._lock:
-            now = time.time()
-            for k in [k for k, v in self._s.items() if now - v.seen > SESSION_IDLE]:
-                del self._s[k]
-            s = self._s.get(sid or "")
-            if s:
-                s.seen = now
-            return s
-
-    def drop(self, sid: str | None) -> None:
-        with self._lock:
-            self._s.pop(sid or "", None)
-
-
-sessions = Store()
+sessions = Store(idle=SESSION_IDLE)
 attempts: dict[str, list[float]] = {}
 app = FastAPI(title="openLMS", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -103,6 +68,10 @@ def fresh(s: Session) -> str:
             raise HTTPException(401, "Session expired. Sign in again.")
         body = r.json()
         s.access, s.refresh = body["access"], body.get("refresh", s.refresh)
+        try:
+            sessions.save(s)
+        except Exception:
+            pass
         return s.access
 
 

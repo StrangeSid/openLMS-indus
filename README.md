@@ -35,7 +35,7 @@ openLMS signs in to Indus LMS as you and reads your data live. Anything that cha
 - **Planner.** A month calendar shows school events and deadlines, coloured by status, plus your attendance.
 - **Library.** Every shared file in one place, filterable by subject and type. You can optionally download them so they open offline.
 - **Progress.** Graded results, completion per subject, and one feed of notifications and announcements.
-- **Live, per-student sessions.** Each student signs in with their own account. Tokens refresh automatically, and files stream straight from the LMS.
+- **Live, per-student sessions.** Each student signs in with their own account. Tokens refresh automatically, sessions survive server restarts, and files stream straight from the LMS.
 - **Demo mode.** *Explore with demo data* on the sign-in page shows the full app with made-up data, which is handy for presentations.
 - **No build step.** The front end is plain HTML, CSS and JavaScript, and works on desktop and phones.
 
@@ -65,13 +65,13 @@ uvicorn openlms.app:app --port 8000
 
 Open <http://localhost:8000> and sign in with your Indus LMS account, or choose **Explore with demo data**.
 
-> [!IMPORTANT]
-> If you host openLMS for other students, serve it over **HTTPS only** (for example behind Caddy or nginx). Passwords travel through the server on sign-in. Sessions are kept in memory, so restarting the server signs everyone out.
-
 | Environment variable | Purpose |
 |---|---|
 | `OPENLMS_DATA_TTL` | Seconds to cache each student's data (default `300`) |
 | `OPENLMS_SECURE_COOKIES=1` | Force `Secure` cookies when TLS ends at a proxy |
+| `OPENLMS_SESSION_FILE` | SQLite session store path (default `.openlms-sessions.db`). Sessions survive restarts; `:memory:` disables persistence |
+| `OPENLMS_SECRET_KEY` | Optional passphrase/Fernet key to encrypt tokens at rest. Without it they rest as plaintext in a `0600` file |
+| `OPENLMS_PUBLIC_HOST` | Comma-separated public hostname(s) allowed past the CSRF Origin check behind a proxy (e.g. Cloudflare/ngrok) |
 | `INDUSLMS_TENANT` | Fallback tenant ID if an account has none |
 
 ### Offline snapshot (no server)
@@ -128,6 +128,7 @@ The app sorts each assignment into one of three states:
 ```
 openlms/
   app.py              FastAPI server: sign-in, sessions, live data, file proxy, demo mode
+  sessions.py         Persistent server-side sessions (SQLite, opaque HttpOnly cookie, optional Fernet)
   data.py             Fetch and shape LMS data (shared with the exporter)
 web/
   login.html          Sign-in page (server mode)

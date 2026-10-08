@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import base64
 import json
+import os
 import sys
 import time
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+os.environ.setdefault("OPENLMS_SESSION_FILE", ":memory:")
 
 try:
     from fastapi.testclient import TestClient
@@ -42,7 +44,7 @@ USER = {"full_name": "Test Student", "email": "s@school.test", "roles": [{"tenan
 @unittest.skipUnless(TestClient, "server dependencies not installed")
 class AppTest(unittest.TestCase):
     def setUp(self):
-        server.sessions = server.Store()
+        server.sessions = server.Store(":memory:")
         server.attempts.clear()
         server.WARM_ON_LOGIN = False
         self.client = TestClient(server.app, base_url="https://testserver")
@@ -50,6 +52,7 @@ class AppTest(unittest.TestCase):
         self.post = mock.patch.object(server.requests, "post").start()
         self.get = mock.patch.object(server.requests, "get").start()
         self.addCleanup(mock.patch.stopall)
+        self.addCleanup(server.sessions.close)
 
     def sign_in(self, access=None):
         self.post.return_value = FakeResponse(200, {"access": access or jwt(time.time() + 3600), "refresh": "r", "user": USER})
