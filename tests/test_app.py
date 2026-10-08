@@ -45,10 +45,12 @@ USER = {"full_name": "Test Student", "email": "s@school.test", "roles": [{"tenan
 class AppTest(unittest.TestCase):
     def setUp(self):
         server.sessions = server.Store(":memory:")
+        server.datacache.clear()
         server.attempts.clear()
         server.WARM_ON_LOGIN = False
         self.client = TestClient(server.app, base_url="https://testserver")
-        self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live: {"live": live, "tok": tok}).start()
+        self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok}).start()
+        self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
         self.post = mock.patch.object(server.requests, "post").start()
         self.get = mock.patch.object(server.requests, "get").start()
         self.addCleanup(mock.patch.stopall)
@@ -74,7 +76,8 @@ class AppTest(unittest.TestCase):
         data = self.client.get("/data.js")
         self.assertTrue(data.text.startswith("window.LMS = "))
         self.assertIn('"live": true', data.text)
-        self.assertEqual(data.headers["cache-control"], "no-store")
+        self.assertIn("private", data.headers["cache-control"])
+        self.assertIn("etag", [k.lower() for k in data.headers])
         self.assertEqual(self.client.get("/api/session").json()["name"], "Test Student")
 
     def test_bad_password(self):

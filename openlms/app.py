@@ -26,15 +26,15 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from openlms.data import build
+from openlms.data import build, flatten, resource_tree
 from openlms.sessions import Session, Store
+from openlms import cache as datacache
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 COOKIE = "openlms_sid"
 DEMO_COOKIE = "openlms_demo"
 LMS_WEB = "https://induslms.com"
 SESSION_IDLE = 12 * 3600
-DATA_TTL = int(os.environ.get("OPENLMS_DATA_TTL", "300"))
 WARM_ON_LOGIN = True
 LOGIN_LIMIT = (10, 600)  # attempts per window (seconds), per client IP
 UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
@@ -80,16 +80,39 @@ def fresh(s: Session) -> str:
 
 
 def live_data(s: Session, refresh: bool = False) -> dict:
-    """Build (or reuse) the student's data; concurrent requests wait for one build."""
-    with s.build_lock:
-        if refresh or not s.data or time.time() - s.data[0] > DATA_TTL:
-            s.data = (time.time(), build(fresh(s), s.tenant, live=True))
-        return s.data[1]
+    """Shared cached payload keyed by session id (singleflight).
+
+    Mixed TTLs: the slow resource crawl is reused from cache while the
+    rest rebuilds. Concurrent tabs wait on one per-sid lock.
+    """
+    entry = datacache.get_entry(s.sid)
+    if entry is None:  # no sid (tests): direct build, no caching
+        return build(fresh(s), s.tenant, live=True)
+    with entry.lock:
+        hit = datacache.get_payload(entry, refresh=refresh)
+        if hit is not None:
+            return hit
+        files = None if refresh else datacache.get_files(entry)
+        token, tenant = fresh(s), s.tenant
+        if files is None:
+            files = flatten(resource_tree(token, tenant))
+            datacache.put_files(entry, files)
+        payload = build(token, tenant, files=files, live=True)
+        datacache.put_payload(entry, payload)
+        return payload
 
 
 def warm(s: Session) -> None:
-    if WARM_ON_LOGIN:
-        threading.Thread(target=lambda: _quiet(live_data, s), daemon=True).start()
+    if WARM_ON_LOGIN and s.sid:
+        sid = s.sid
+        def _fill() -> None:
+            try:
+                sess = sessions.get(sid)
+                if sess:
+                    _quiet(live_data, sess)
+            except Exception:
+                pass
+        threading.Thread(target=_fill, daemon=True).start()
 
 
 def _quiet(fn, *args) -> None:
@@ -181,6 +204,7 @@ def login(creds: Credentials, request: Request, response: Response):
 def logout(request: Request, response: Response):
     sid, _ = current(request)
     sessions.drop(sid)
+    datacache.drop(sid)
     response.delete_cookie(COOKIE)
     response.delete_cookie(DEMO_COOKIE)
     return {"ok": True}
@@ -199,16 +223,31 @@ def session_info(request: Request):
     return {"name": s.name, "email": s.email}
 
 
+SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
+            "eol", "assessments", "tasks", "unread", "notifications",
+            "attendance", "announcements", "calendar", "resources", "downloaded")
+
+
 @app.get("/data.js")
-def data_js(request: Request, refresh: bool = False):
-    headers = {"Cache-Control": "no-store"}
+def data_js(request: Request, refresh: bool = False, sections: str | None = None):
     _, s = current(request)
     if not s:
+        headers = {"Cache-Control": "no-store"}
         script = ("window.OPENLMS_DEMO = true;" if request.cookies.get(DEMO_COOKIE)
                   else "location.replace('login.html');")
         return Response(script, media_type="text/javascript", headers=headers)
-    return Response("window.LMS = " + json.dumps(live_data(s, refresh), default=str) + ";",
-                    media_type="text/javascript", headers=headers)
+    payload = live_data(s, refresh)
+    if sections:
+        want = {"live"} | {p.strip() for p in sections.split(",") if p.strip() in SECTIONS}
+        payload = {k: v for k, v in payload.items() if k in want}
+    etag = datacache.etag_for(payload)
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag,
+                         "Cache-Control": "private, max-age=60, must-revalidate"})
+    body = "window.LMS = " + json.dumps(payload, default=str) + ";"
+    return Response(body, media_type="text/javascript",
+                    headers={"Cache-Control": "private, max-age=60, must-revalidate",
+                             "ETag": etag})
 
 
 @app.get("/api/files/{resource_id}/{file_id}")

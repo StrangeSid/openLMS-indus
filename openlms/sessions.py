@@ -10,8 +10,8 @@ Design (why not tokens-in-cookies):
     revoked server-side (logout only clears the browser copy) and they
     push ~1-2KB of tokens into every request. An opaque id revokes
     instantly via ``drop()`` and keeps cookies tiny.
-  - The rendered-page cache (``Session.data``) is never persisted;
-    it is rebuilt on demand after a restart via token refresh.
+  - The rendered-page cache lives in ``openlms/cache.py`` (in-process,
+    per-student) and is never persisted; only tokens rest in SQLite.
 
 Encryption at rest (optional but recommended for shared hosting):
   - Set ``OPENLMS_SECRET_KEY`` to any passphrase or a Fernet key.
@@ -75,9 +75,7 @@ class Session:
         self.seen = time.time()
         self.created = self.seen
         self.sid: str | None = None
-        self.data: tuple[float, dict] | None = None
         self.lock = threading.Lock()
-        self.build_lock = threading.Lock()
 
 
 class Store:

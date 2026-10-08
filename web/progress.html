@@ -50,8 +50,9 @@
       <div class="scroll" id="feed"></div></section>
   </main>
 </div>
+<script src="assets/cache.js"></script>
 <script src="data.js"></script>
-<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
 mountChrome('progress', null);

@@ -52,8 +52,9 @@
   </main>
 </div>
 <aside class="drawer" id="drawer"></aside>
+<script src="assets/cache.js"></script>
 <script src="data.js"></script>
-<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
 mountChrome('files', null, `Search ${D.resources.length} files by name, teacher, folder…`);

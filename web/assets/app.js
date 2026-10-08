@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 const D = window.LMS;
 const TODAY = new Date();
+// Persist for offline/stale fallback (server stays source of truth).
+try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
 
 const SUBJECTS = [
   { key: 'math', match: /math/i, short: 'Maths', c1: '#5B4FCF', c2: '#ECEAFB', glyph: 'Σ' },
@@ -186,6 +188,7 @@ function topbar(placeholder = 'Search assignments, classes, files…') {
     <a class="bell" href="progress.html" title="Updates">${icon('bell')}<b>${D.unread}</b></a><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
 }
 async function signOut() {
+  try { window.__lmsClear && window.__lmsClear(); } catch (e) {}
   await fetch('api/logout', { method: 'POST' }).catch(() => {});
   location.replace('login.html');
 }

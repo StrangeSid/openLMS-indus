@@ -7,7 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Persistent server-side sessions (`openlms/sessions.py`): opaque HttpOnly session cookie + SQLite store (0600, `OPENLMS_SESSION_FILE`, `:memory:` for ephemeral). Restarts no longer sign everyone out; page cache still rebuilds on demand. Optional `OPENLMS_SECRET_KEY` Fernet-encrypts tokens at rest; rotated secrets force re-login. Refreshed tokens are saved back to disk.
+- Persistent server-side sessions (`openlms/sessions.py`): opaque HttpOnly session cookie + SQLite store (0600, `OPENLMS_SESSION_FILE`, `:memory:` for ephemeral). Restarts no longer sign everyone out. Optional `OPENLMS_SECRET_KEY` Fernet-encrypts tokens at rest; rotated secrets force re-login. Refreshed tokens are saved back to disk.
+- Persistent data cache (`openlms/cache.py` + `web/assets/cache.js`): per-student in-process payload cache with singleflight (navigation no longer rebuilds on every click), mixed TTLs (`OPENLMS_DATA_TTL` + `OPENLMS_FILES_TTL` for the slow resource crawl), shared fetch pool, `ETag`/`304` with `private` HTTP caching, `?sections=` slices and `?refresh=` escape hatch, browser `localStorage` stale fallback cleared on logout, livelier login progress messages.
 
 ### Fixed
 

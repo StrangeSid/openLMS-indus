@@ -31,7 +31,9 @@ class SessionStoreTest(unittest.TestCase):
             self.assertEqual(got.access, "a1")
             self.assertEqual(got.refresh, "r1")
             self.assertEqual(got.tenant, "tid")
-            self.assertIsNone(got.data)  # page cache is never persisted
+            # Page payload lives in openlms/cache.py (in-process), never in
+            # SQLite: a rehydrated session carries tokens/identity only.
+            self.assertFalse(hasattr(got, "data"))
             s1.close()
             s2.close()
 
