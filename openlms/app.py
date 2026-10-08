@@ -40,8 +40,12 @@ LOGIN_LIMIT = (10, 600)  # attempts per window (seconds), per client IP
 UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
 # Public hostnames the app is served under (e.g. behind Cloudflare/ngrok where
 # the Host header seen by the app differs from the browser's Origin).
-# Comma-separated, e.g. OPENLMS_PUBLIC_HOST=lms.sidevv.xyz
-PUBLIC_HOSTS = {h.strip().lower() for h in os.environ.get("OPENLMS_PUBLIC_HOST", "").split(",") if h.strip()}
+# Comma-separated extra hosts, e.g. OPENLMS_PUBLIC_HOST=example.com
+# lms.sidevv.xyz is always allowed because the Cloudflare Origin Rule rewrites
+# Host to the ngrok origin, so Origin/Host can never match without this.
+PUBLIC_HOSTS = {"lms.sidevv.xyz"} | {
+    h.strip().lower() for h in os.environ.get("OPENLMS_PUBLIC_HOST", "").split(",") if h.strip()
+}
 
 
 sessions = Store(idle=SESSION_IDLE)
@@ -115,8 +119,14 @@ async def guard(request: Request, call_next):
     if request.method not in ("GET", "HEAD") and path.startswith("/api/"):
         origin = request.headers.get("origin")
         host = (request.headers.get("host") or "").lower()
+        forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip().lower()
         origin_host = origin.split("://", 1)[-1].lower() if origin else ""
-        if origin and origin_host != host and origin_host not in PUBLIC_HOSTS:
+        if (
+            origin
+            and origin_host != host
+            and origin_host != forwarded_host
+            and origin_host not in PUBLIC_HOSTS
+        ):
             return JSONResponse({"detail": "Cross-site request blocked."}, 403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -152,8 +162,14 @@ def login(creds: Credentials, request: Request, response: Response):
     if not tenant:
         raise HTTPException(403, "This account has no school attached.")
     sid = sessions.add(Session(body["access"], body.get("refresh", ""), tenant, user))
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    is_secure = (
+        request.url.scheme == "https"
+        or forwarded_proto == "https"
+        or os.environ.get("OPENLMS_SECURE_COOKIES") == "1"
+    )
     response.set_cookie(COOKIE, sid, httponly=True, samesite="lax", max_age=SESSION_IDLE,
-                        secure=request.url.scheme == "https" or os.environ.get("OPENLMS_SECURE_COOKIES") == "1")
+                        secure=is_secure)
     attempts.pop(ip, None)
     response.delete_cookie(DEMO_COOKIE)
     response.headers["Cache-Control"] = "no-store"

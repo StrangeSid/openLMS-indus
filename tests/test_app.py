@@ -110,10 +110,16 @@ class AppTest(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_public_host_allowlisted(self):
+        # lms.sidevv.xyz is allowed by default: Cloudflare Origin Rule rewrites
+        # Host to the ngrok origin, so Origin/Host never match without this.
         headers = {"origin": "https://lms.sidevv.xyz"}
-        self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 403)
-        with mock.patch.object(server, "PUBLIC_HOSTS", {"lms.sidevv.xyz"}):
-            self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 200)
+        self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 200)
+        with mock.patch.object(server, "PUBLIC_HOSTS", set()):
+            self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 403)
+        # X-Forwarded-Host from Cloudflare/ngrok also satisfies the guard.
+        with mock.patch.object(server, "PUBLIC_HOSTS", set()):
+            fwd = {"origin": "https://lms.sidevv.xyz", "x-forwarded-host": "lms.sidevv.xyz"}
+            self.assertEqual(self.client.post("/api/logout", headers=fwd).status_code, 200)
 
     def test_exported_files_not_served(self):
         self.assertEqual(self.client.get("/files/Physics/notes.pdf").status_code, 404)
