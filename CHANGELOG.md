@@ -5,6 +5,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-07
+
+### Added
+
+- FastAPI server (`openlms/app.py`): sign in with an Indus LMS account, per-student in-memory sessions, automatic token refresh, live `data.js`, and a file proxy so Library files open without downloading first.
+- Sign-in page (`web/login.html`) and a Sign out button in live mode.
+- SA tests and learning tasks in the assignments lists.
+- Submit / Take test / View buttons that open the matching Indus LMS page, with EOL test IDs shown; an "On Indus LMS" sidebar section for messaging, policies, learning pathway, progress report and help.
+- Demo mode on the sign-in page, a loading screen after sign-in, and a friendly page for files a teacher has restricted.
+- Server tests with a stubbed LMS, covering sign-in, refresh, logout, rate limiting, cross-site blocking, the file proxy and demo mode.
+
+### Changed
+
+- Actions that change school data (submitting, uploading, tests, messaging) stay on Indus LMS. openLMS links to the exact page instead of performing them.
+- A failing LMS section no longer breaks the whole page.
+- Data shaping moved to `openlms/data.py`, shared by the server and `tools/export.py`, with LMS requests now made in parallel.
+- README, CONTRIBUTING and FINDINGS updated for the server and the link-out approach.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

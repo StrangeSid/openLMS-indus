@@ -16,7 +16,7 @@
     { title: 'English A: Language and Literature', level: 'SL', code: 'EN01', teacher: 'L. Fernandes' },
     { title: 'Business Management', level: 'HL', code: 'BM01', teacher: 'V. Rao' },
     { title: 'German ab initio', level: 'SL', code: 'GER01', teacher: 'F. Schmidt' },
-  ];
+  ].map((c, i) => ({ ...c, id: `demo-course-${i + 1}`, subject: c.title }));
   const teacher = s => courses.find(c => c.title.startsWith(s)).teacher;
 
   const eol = [
@@ -33,6 +33,7 @@
     score: submitted ? '4.00' : null, total: '5.00', teacher: teacher(subject.split(':')[0].split(' ')[0]),
     assigned: at(due - 7, 9), due: at(due), opens: at(due - 7, 9),
     submitted: submitted ? at(submitted, 16) : null, availability: due < 0 ? 'expired' : 'active',
+    testId: `${subject.slice(0, 3).toUpperCase()}${String(100 + due + 20).padStart(3, '0')}`,
   }));
 
   const assessments = [
@@ -41,10 +42,22 @@
     ['SDL · Kinematics', 'Physics', 'SDL', null, -5, -6, '8.0'],
     ['Case study analysis', 'Business Management', 'FA', null, -15, -14, '15.0'],
     ['Leseverstehen', 'German Ab Initio', 'FA', 'Reading', -20, -21, '17.0'],
+    ['Term 1 summative', 'Mathematics: Analysis And Approaches', 'SA', null, 18, null, null],
+    ['Mechanics summative', 'Physics', 'SA', null, -8, -9, '16.0'],
   ].map(([title, subject, type, category, due, submitted, marks]) => ({
     title, subject, type, category, due: at(due), status: marks ? 'graded' : 'assigned', marks,
     total: '20', teacher: teacher(subject.split(':')[0].split(' ')[0]),
     submitted: submitted ? at(submitted, 15) : null, assigned: at(due - 10, 9),
+  }));
+
+  const tasks = [
+    ['Lab report: free fall', 'Physics', 4, null],
+    ['Commentary draft', 'English A: Language And Literature', 11, null],
+    ['Market research survey', 'Business Management', -3, null],
+    ['Vocabulary poster', 'German Ab Initio', -11, -12],
+  ].map(([title, subject, due, submitted]) => ({
+    title, subject, due: at(due), status: submitted ? 'submitted' : 'assigned',
+    submitted: submitted ? at(submitted, 14) : null, assigned: at(due - 7, 9), teacher: teacher(subject.split(':')[0].split(' ')[0]),
   }));
 
   const announcements = [
@@ -74,12 +87,12 @@
     programCode: 'DP',
     program: 'DP · Grade XI',
     year: '2026-27',
-    courses, eol, assessments, announcements, resources,
+    courses, eol, assessments, tasks, announcements, resources,
     unread: 4,
     notifications: [
-      { title: 'New FA test: STEAM project brief', message: 'Your teacher published a new FA test.', type: 'fa', actor: teacher('Computer'), at: at(-1, 11), read: false },
-      { title: 'New EOL test: Composite functions', message: 'A new end-of-lesson test is open.', type: 'eol', actor: teacher('Mathematics'), at: at(-2, 9), read: false },
-      { title: 'Result published: SDL · Kinematics', message: 'Your work has been graded.', type: 'result', actor: teacher('Physics'), at: at(-4, 14), read: true },
+      { title: 'New FA test: STEAM project brief', message: 'Your teacher published a new FA test.', type: 'fa', actor: teacher('Computer'), at: at(-1, 11), read: false, link: '/assignments/test/computer-science/fa' },
+      { title: 'New EOL test: Composite functions', message: 'A new end-of-lesson test is open.', type: 'eol', actor: teacher('Mathematics'), at: at(-2, 9), read: false, link: '/assignments/test/mathematics-analysis-and-approaches/eol' },
+      { title: 'Result published: SDL · Kinematics', message: 'Your work has been graded.', type: 'result', actor: teacher('Physics'), at: at(-4, 14), read: true, link: '/assignments/test/physics/fa' },
     ],
     attendance: { total_sessions: records.length, present, absent: records.length - present, late: 0, percentage: (present / records.length * 100).toFixed(1), records },
     calendar: [

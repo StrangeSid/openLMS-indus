@@ -64,6 +64,11 @@ h1, h2, h3, h4 { margin: 0; letter-spacing: -0.01em; }
 .side .cls span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side .cls:hover { background: rgba(255,255,255,.06); color: #fff; }
 .side .cls.on { background: rgba(255,255,255,.12); color: #fff; }
+.side .lmslink { color: #A9C2BD; }
+.side .lmslink svg:last-child { margin-left: auto; opacity: .6; flex: none; }
+.ext { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 5px 10px; white-space: nowrap; }
+.btn.ghost.ext { background: #fff; }
+.side .signout { margin-top: auto; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; }
 .with-side { margin-left: var(--side); }
 
 .topbar { height: 58px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 28px; gap: 16px; position: sticky; top: 0; z-index: 4; }
