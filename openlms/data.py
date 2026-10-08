@@ -146,6 +146,7 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
         "notifications": [{
             "title": n["title"], "message": n.get("message"), "type": n.get("type"),
             "actor": n.get("actor_name"), "at": n.get("created_at"), "read": n.get("is_read"), "link": n.get("link"),
+            "courseId": n.get("course_id"),
         } for n in results(notes)[:25]],
         "attendance": {
             **{k: att.get(k) for k in ("total_sessions", "present", "absent", "late", "percentage")},

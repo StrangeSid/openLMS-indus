@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Indus LMS deep links: EOL/FA/SA buttons now open the subject hub (`/assignments?courseId=&classId=`) instead of `/assignments/test/<kind>?subject=&course_id=`. The test pages ignore course params in the URL and filter by the localStorage-selected course, so the old links showed 0 tests whenever storage held another subject. The hub reads the course from the URL and is one click from the test lists.
+- Learning-task links use `?courseId=` (camelCase), which `/studentassignment` actually reads.
+- Notification links resolve to the subject hub when the course is known (by id or link slug) instead of opening raw `/assignments/test/<slug>/<kind>` links.
+- Resource links include the required subject slug (`/courses/:id/resources/:slug`); slug-less URLs render a Network Error on Indus.
+- Notifications payload now carries `courseId` for link resolution.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added

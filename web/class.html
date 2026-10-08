@@ -85,7 +85,7 @@ function resources() {
   const folders = {};
   files.filter(f => !q || `${f.title} ${f.folder}`.toLowerCase().includes(q)).forEach(f => (folders[f.folder || 'General'] ||= []).push(f));
   return Object.entries(folders).map(([f, list]) => `<div class="folder"><h3>${icon('files', 16)} ${esc(f)} <span class="pill grey">${list.length}</span></h3><div class="files">${list.map(x => {
-    const k = fileKind(x.name), href = x.path ? encodeURI(x.path) : lmsUrl(course.id ? `/courses/${course.id}/resources` : '/resources');
+    const k = fileKind(x.name), href = x.path ? encodeURI(x.path) : resourceLinkFor(course.title);
     return `<a class="card file" href="${esc(href)}" target="_blank" rel="noopener"><span class="ftype" style="background:${k.color}">${k.label}</span><div><b>${esc(x.title)}</b><span class="muted" style="font-size:12px">${x.path ? esc(x.teacher || '') : 'Open on Indus LMS ↗'}</span></div></a>`;
   }).join('')}</div></div>`).join('') || '<div class="card empty">No shared files</div>';
 }
