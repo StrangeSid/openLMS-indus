@@ -36,6 +36,10 @@ DATA_TTL = int(os.environ.get("OPENLMS_DATA_TTL", "300"))
 WARM_ON_LOGIN = True
 LOGIN_LIMIT = (10, 600)  # attempts per window (seconds), per client IP
 UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
+# Public hostnames the app is served under (e.g. behind Cloudflare/ngrok where
+# the Host header seen by the app differs from the browser's Origin).
+# Comma-separated, e.g. OPENLMS_PUBLIC_HOST=lms.sidevv.xyz
+PUBLIC_HOSTS = {h.strip().lower() for h in os.environ.get("OPENLMS_PUBLIC_HOST", "").split(",") if h.strip()}
 
 
 class Session:
@@ -141,7 +145,9 @@ async def guard(request: Request, call_next):
         return PlainTextResponse("Not found", 404)
     if request.method not in ("GET", "HEAD") and path.startswith("/api/"):
         origin = request.headers.get("origin")
-        if origin and origin.split("://", 1)[-1] != request.headers.get("host"):
+        host = (request.headers.get("host") or "").lower()
+        origin_host = origin.split("://", 1)[-1].lower() if origin else ""
+        if origin and origin_host != host and origin_host not in PUBLIC_HOSTS:
             return JSONResponse({"detail": "Cross-site request blocked."}, 403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
