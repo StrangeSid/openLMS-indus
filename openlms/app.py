@@ -144,6 +144,8 @@ async def guard(request: Request, call_next):
         if origin and origin.split("://", 1)[-1] != request.headers.get("host"):
             return JSONResponse({"detail": "Cross-site request blocked."}, 403)
     response = await call_next(request)
+    if not path.startswith("/api/") and response.status_code in (200, 304):
+        response.headers.setdefault("Cache-Control", "no-cache")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     return response
@@ -193,6 +195,11 @@ def logout(request: Request, response: Response):
     response.delete_cookie(COOKIE)
     response.delete_cookie(DEMO_COOKIE)
     return {"ok": True}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return RedirectResponse("/assets/favicon.svg", 301)
 
 
 @app.get("/api/demo")

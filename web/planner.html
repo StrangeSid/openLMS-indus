@@ -5,7 +5,7 @@
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/app.css">
 <style>
-  main { padding: 24px 28px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; max-width: 1400px; }
+  main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px); display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 420px); gap: clamp(20px, 2vw, 32px); }
   .cal { padding: 18px; }
   .calhead { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
   .calhead h2 { font-size: 20px; font-weight: 800; margin-right: auto; }
@@ -13,7 +13,7 @@
   .legend { display: flex; gap: 14px; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 12px; flex-wrap: wrap; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-  .dow { padding: 8px; font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--canvas); }
+  .dow { padding: 9px 10px; font-size: 12px; font-weight: 700; color: var(--muted); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #F6F9F8; }
   .day { min-width: 0; min-height: 104px; padding: 6px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
   .day.out { background: #FBFBFD; color: var(--muted); }
   .day.off { background: #F7F8F8; }

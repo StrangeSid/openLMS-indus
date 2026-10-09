@@ -30,7 +30,10 @@ fake.assessments = lambda tok, params=None: {"count": 1, "results": [] if (param
                    "due_date": "2026-10-03T00:00:00Z", "teacher_name": "T. Teacher"}}]}
 fake.api_get_json = lambda tok, path, params=None: [
     {"id": "t1", "title": "Lab report", "subject": "Physics", "due_date": "2026-10-12T00:00:00Z", "status": "assigned"}
-] if path.endswith("/assignments/student/list/") else {}
+] if path.endswith("/assignments/student/list/") else [
+    {"contact_user_id": "u1", "contact_user_name": "T. Teacher", "contact_user_role": "TEACHER",
+     "last_message": "See you in class", "last_updated": "2026-10-06T10:00:00Z"}
+] if path.endswith("/messages/threads/") else {}
 fake.notifications = lambda tok, tid, limit: {"unread_count": 1, "results": [
     {"title": "N", "message": "m", "type": "fa", "actor_name": "T", "created_at": "2026-10-01", "is_read": False}]}
 fake.attendance = lambda tok: {"total_sessions": 2, "present": 1, "absent": 1, "late": 0, "percentage": 50.0,
@@ -72,6 +75,8 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(data["tasks"][0]["title"], "Lab report")
         self.assertEqual(data["tasks"][0]["due"], "2026-10-12T00:00:00Z")
         self.assertEqual(data["courses"][0]["id"], None)
+        self.assertEqual(data["threads"], [{"name": "T. Teacher", "role": "TEACHER", "last": "See you in class",
+                                            "at": "2026-10-06T10:00:00Z"}])
         self.assertEqual(len(data["attendance"]["records"]), 1)
         self.assertEqual(data["announcements"][0]["message"], "Hi all")
         self.assertEqual(data["resources"], [{"title": "Notes", "name": "notes.pdf", "subject": "Physics",

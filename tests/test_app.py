@@ -106,6 +106,12 @@ class AppTest(unittest.TestCase):
         r = self.client.post("/api/logout", headers={"origin": "https://evil.example"})
         self.assertEqual(r.status_code, 403)
 
+    def test_favicon(self):
+        r = self.client.get("/favicon.ico", follow_redirects=False)
+        self.assertEqual(r.status_code, 301)
+        self.assertEqual(r.headers["location"], "/assets/favicon.svg")
+        self.assertEqual(self.client.get("/favicon.ico").headers["content-type"], "image/svg+xml")
+
     def test_exported_files_not_served(self):
         self.assertEqual(self.client.get("/files/Physics/notes.pdf").status_code, 404)
 

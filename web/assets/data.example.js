@@ -89,6 +89,11 @@
     year: '2026-27',
     courses, eol, assessments, tasks, announcements, resources,
     unread: 4,
+    threads: [
+      { name: teacher('Physics'), role: 'TEACHER', last: 'Please bring your lab notebook tomorrow.', at: at(-0.2, 15) },
+      { name: teacher('Computer'), role: 'TEACHER', last: 'Groups are posted. Let me know if you want to swap.', at: at(-1, 17) },
+      { name: teacher('English'), role: 'TEACHER', last: 'Good draft! See my comments on paragraph two.', at: at(-3, 12) },
+    ],
     notifications: [
       { title: 'New FA test: STEAM project brief', message: 'Your teacher published a new FA test.', type: 'fa', actor: teacher('Computer'), at: at(-1, 11), read: false, link: '/assignments/test/computer-science/fa' },
       { title: 'New EOL test: Composite functions', message: 'A new end-of-lesson test is open.', type: 'eol', actor: teacher('Mathematics'), at: at(-2, 9), read: false, link: '/assignments/test/mathematics-analysis-and-approaches/eol' },

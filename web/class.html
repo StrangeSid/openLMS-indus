@@ -5,16 +5,26 @@
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/app.css">
 <style>
-  .content { padding: 24px 28px 40px; max-width: 1120px; }
-  .banner { height: 150px; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid var(--line); }
-  .banner .over { position: absolute; left: 24px; bottom: 18px; right: 160px; }
-  .banner h1 { font-size: 26px; font-weight: 800; }
-  .banner p { margin: 4px 0 0; font-weight: 700; color: var(--ink-2); }
-  .ctabs { display: flex; gap: 2px; margin: 18px 0; border-bottom: 1px solid var(--line); }
-  .ctabs button { border: 0; background: none; padding: 10px 14px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .ctabs button.on { color: var(--brand); border-color: var(--brand); }
-  .ctabs .n { font-size: 11px; background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; margin-left: 4px; color: var(--ink-2); }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+  .content { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 40px; }
+  .banner { position: relative; overflow: hidden; border-radius: 24px; padding: 28px 30px 24px; color: #fff; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; min-height: 176px;
+    background: radial-gradient(520px 220px at 90% 0%, color-mix(in srgb, var(--subj) 55%, transparent), transparent 70%), linear-gradient(135deg, var(--river) 0%, color-mix(in srgb, var(--subj) 45%, var(--river)) 100%);
+    box-shadow: 0 18px 40px -20px rgba(13,58,53,.6); }
+  .banner::after { content: ''; position: absolute; inset: auto 0 0 0; height: 100%; pointer-events: none; opacity: .35;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='176' viewBox='0 0 600 176'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.18' stroke-width='1.2'%3E%3Cpath d='M0 110c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3Cpath d='M0 136c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3Cpath d='M0 162c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3C/g%3E%3C/svg%3E") right bottom / 600px 176px repeat-x; }
+  .banner > * { position: relative; z-index: 1; }
+  .banner .who { display: flex; align-items: center; gap: 18px; min-width: 0; }
+  .banner .badge { width: 68px; height: 68px; border-radius: 20px; background: rgba(255,255,255,.95); display: grid; place-items: center; flex: none; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35); }
+  .banner .level { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.75); }
+  .banner h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 700; color: #fff; letter-spacing: -0.02em; margin: 2px 0 4px; }
+  .banner p { margin: 0; font-weight: 600; color: rgba(255,255,255,.8); }
+  .banner .btn.ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); backdrop-filter: blur(6px); }
+  .banner .btn.ghost:hover { background: rgba(255,255,255,.2); border-color: #fff; color: #fff; }
+  .ctabs { display: flex; gap: 4px; margin: 20px 0; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; width: fit-content; }
+  .ctabs button { border: 0; background: none; padding: 8px 16px; font-weight: 700; color: var(--ink-2); border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; }
+  .ctabs button.on { background: var(--river); color: #fff; }
+  .ctabs .n { font-family: var(--display); font-size: 13px; color: var(--muted); font-weight: 700; }
+  .ctabs button.on .n { color: var(--accent); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 24vw, 400px); gap: clamp(20px, 2vw, 32px); }
   .post { padding: 18px; margin-bottom: 14px; }
   .post header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .post header span { font-size: 12px; color: var(--muted); }
@@ -45,7 +55,7 @@
   .ftype { width: 38px; height: 44px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: end center; padding-bottom: 6px; flex: none; }
   .file b { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .content { padding: 16px; } .banner .over { right: 24px; } }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .content { padding: 16px; } .banner { flex-direction: column; align-items: flex-start; padding: 22px; } .banner .badge { width: 54px; height: 54px; border-radius: 16px; } .ctabs { width: 100%; } .ctabs button { flex: 1; justify-content: center; padding: 8px 6px; gap: 5px; } }
 </style></head>
 <body>
 <div class="with-side">
@@ -91,7 +101,10 @@ function resources() {
 }
 function render() {
   document.getElementById('content').innerHTML = `
-    <div class="banner">${cover(course.title, 1000, 150)}<div class="over"><span class="pill" style="background:#fff;color:${S.c1}">${esc(D.programCode)}${course.level ? ' · ' + course.level : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div>${course.id ? `<div style="position:absolute;right:20px;top:18px">${extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS')}</div>` : ''}</div>
+    <div class="banner" style="--subj:${S.c1}">
+      <div class="who"><span class="badge"><svg width="40" height="40" viewBox="0 0 40 40">${glyphSvg(S.glyph, S.c1, 20, 20, 22)}</svg></span>
+        <div><span class="level">${esc(D.programCode)}${course.level ? ' ' + esc(course.level) : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div></div>
+      ${course.id ? extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS') : ''}</div>
     <div class="ctabs">${[['stream', 'Stream', anns.length], ['work', 'Assignments', work.length], ['files', 'Resources', files.length]].map(([k, l, n]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}<span class="n">${n}</span></button>`).join('')}</div>
     ${tab === 'stream' ? stream() : tab === 'work' ? work_() : resources()}`;
 }

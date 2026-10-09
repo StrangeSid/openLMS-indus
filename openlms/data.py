@@ -94,6 +94,7 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
         "fa": (lambda: assessments(tok, "FA"), []),
         "sa": (lambda: assessments(tok, "SA"), []),
         "tasks": (lambda: lms.api_get_json(tok, f"/api/v1/tenants/{tid}/assignments/student/list/"), []),
+        "threads": (lambda: lms.api_get_json(tok, f"/api/v1/tenants/{tid}/messages/threads/"), []),
         "notes": (lambda: lms.notifications(tok, tid, 100), {}),
         "att": (lambda: lms.attendance(tok), {}),
         "announcements": (lambda: lms.announcements(tok), []),
@@ -142,6 +143,10 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
             "due": t.get("due_date"), "status": t.get("status"), "submitted": t.get("submitted_at"),
             "assigned": t.get("created_at") or t.get("assigned_at"), "teacher": t.get("teacher_name"),
         } for t in results(r["tasks"])],
+        "threads": sorted(({
+            "name": t.get("contact_user_name"), "role": t.get("contact_user_role"),
+            "last": t.get("last_message"), "at": t.get("last_updated"),
+        } for t in results(r["threads"])), key=lambda t: t["at"] or "", reverse=True)[:20],
         "unread": notes.get("unread_count", 0),
         "notifications": [{
             "title": n["title"], "message": n.get("message"), "type": n.get("type"),

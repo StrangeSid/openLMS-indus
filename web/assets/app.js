@@ -68,6 +68,7 @@ const ICONS = {
   route: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>',
   report: '<path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M9 15v2M12 12v5M15 9v8"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17v.5"/>',
+  agenda: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 3v2M16 3v2M8 10l1.5 1.5L12 9M8 16l1.5 1.5L12 15M14.5 10.5H17M14.5 16.5H17"/>',
 };
 function icon(name, size = 20, extra = '') {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${ICONS[name]}</svg>`;
@@ -122,7 +123,8 @@ function sidebar(active, activeClass) {
 function topbar(placeholder = 'Search assignments, classes, files…') {
   return `<header class="topbar"><button class="menu-btn" onclick="document.body.classList.toggle('menu-open')" aria-label="Menu">${icon('menu')}</button>
     <label class="search">${icon('search', 16)}<input placeholder="${placeholder}" id="q"></label><div style="flex:1"></div>
-    <a class="bell" href="progress.html" title="Updates">${icon('bell')}<b>${D.unread}</b></a><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
+    <button class="agenda-btn" id="agenda-btn" onclick="toggleAgenda(true)" aria-haspopup="dialog" aria-controls="agenda">${icon('agenda', 17)}<span>Academic Agenda</span>${outstanding().length ? `<b>${outstanding().length}</b>` : ''}</button>
+    <button class="bell" id="bell" onclick="toggleInbox(true)" aria-label="Open inbox" aria-haspopup="dialog" aria-controls="inbox">${icon('bell')}${D.unread ? `<b>${D.unread > 99 ? '99+' : D.unread}</b>` : ''}</button><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
 }
 async function signOut() {
   await fetch('api/logout', { method: 'POST' }).catch(() => {});
@@ -133,6 +135,110 @@ function mountChrome(active, activeClass, placeholder) {
   document.head.appendChild(fav);
   document.body.insertAdjacentHTML('afterbegin', sidebar(active, activeClass));
   document.querySelector('.with-side').insertAdjacentHTML('afterbegin', topbar(placeholder));
+  document.body.insertAdjacentHTML('beforeend', `<div class="inbox-shade" id="inbox-shade" onclick="closeDrawers()"></div>
+    <aside class="inbox agenda" id="agenda" role="dialog" aria-modal="true" aria-labelledby="agenda-title" hidden>
+      <header><div><h2 id="agenda-title">Academic Agenda</h2><p class="agenda-sub" id="agenda-sub"></p></div><button class="x" onclick="toggleAgenda(false)" aria-label="Close agenda">×</button></header>
+      <div class="agenda-progress"><span id="agenda-bar"></span></div>
+      <nav class="inbox-tabs" id="agenda-tabs" role="tablist"></nav>
+      <div class="inbox-list" id="agenda-list"></div>
+      <footer><p class="agenda-note">Ticks are saved on this device only. Hand in work on Indus LMS.</p></footer>
+    </aside>
+    <aside class="inbox" id="inbox" role="dialog" aria-modal="true" aria-labelledby="inbox-title" hidden>
+      <header><h2 id="inbox-title">Inbox</h2><button class="x" onclick="toggleInbox(false)" aria-label="Close inbox">×</button></header>
+      <nav class="inbox-tabs" id="inbox-tabs" role="tablist"></nav>
+      <div class="inbox-list" id="inbox-list"></div>
+      <footer>${extLink(lmsUrl('/messaging'), 'Messages on Indus LMS', 'btn')}${extLink(lmsUrl('/announcement'), 'All announcements')}</footer>
+    </aside>`);
+  document.getElementById('inbox-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b) renderInbox(b.dataset.tab); };
+  document.getElementById('agenda-tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (b) renderAgenda(b.dataset.tab); };
+  document.getElementById('agenda-list').onchange = e => {
+    const box = e.target.closest('input[data-key]'); if (!box) return;
+    const done = ticked(); box.checked ? done.add(box.dataset.key) : done.delete(box.dataset.key);
+    saveTicked(done); renderAgenda(agendaTab);
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawers(); });
+}
+function closeDrawers() { toggleInbox(false); toggleAgenda(false); }
+
+// Academic Agenda: everything still to do, with personal ticks kept in this browser.
+const outstanding = () => assignments().filter(a => a.state !== 'done');
+const agendaKey = a => [a.type, a.subject, a.title, a.due || ''].join('|');
+function ticked() { try { return new Set(JSON.parse(localStorage.getItem('agenda.ticked') || '[]')); } catch { return new Set(); } }
+function saveTicked(set) { try { localStorage.setItem('agenda.ticked', JSON.stringify([...set])); } catch {} }
+let agendaTab = 'all';
+function agendaGroup(a) {
+  if (a.state === 'late') return 'Overdue';
+  if (!a.due) return 'No deadline';
+  const n = daysUntil(a.due);
+  return n <= 0 ? 'Today' : n === 1 ? 'Tomorrow' : n <= 7 ? 'This week' : 'Later';
+}
+function renderAgenda(tab = agendaTab) {
+  agendaTab = tab;
+  const all = outstanding(), done = ticked();
+  const order = ['Overdue', 'Today', 'Tomorrow', 'This week', 'Later', 'No deadline'];
+  const items = all.filter(a => tab === 'all' || (tab === 'late' ? a.state === 'late' : a.state === 'upcoming' && a.due && daysUntil(a.due) <= 7))
+    .sort((a, b) => order.indexOf(agendaGroup(a)) - order.indexOf(agendaGroup(b)) || new Date(a.due || 8.64e15) - new Date(b.due || 8.64e15));
+  const tickedCount = all.filter(a => done.has(agendaKey(a))).length;
+  document.getElementById('agenda-sub').textContent = `${all.length} to do, ${tickedCount} ticked off`;
+  document.getElementById('agenda-bar').style.width = `${all.length ? Math.round(tickedCount / all.length * 100) : 0}%`;
+  const week = all.filter(a => a.state === 'upcoming' && a.due && daysUntil(a.due) <= 7).length;
+  document.getElementById('agenda-tabs').innerHTML = [['all', 'Everything', all.length], ['late', 'Overdue', all.filter(a => a.state === 'late').length], ['week', 'Next 7 days', week]]
+    .map(([k, l, n]) => `<button role="tab" data-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${l}<span>${n}</span></button>`).join('');
+  let html = '', last = null;
+  for (const a of items) {
+    const g = agendaGroup(a), s = subj(a.subject), key = agendaKey(a), on = done.has(key);
+    if (g !== last) { html += `<h3 class="agenda-group ${g === 'Overdue' ? 'late' : ''}">${g}</h3>`; last = g; }
+    const when = a.state === 'late' ? `Missed ${fmtDate(a.due, { day: 'numeric', month: 'short' })}`
+      : a.due ? `Due ${fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' })}, ${fmtTime(a.due)}` : 'No deadline set';
+    html += `<div class="agenda-item ${on ? 'ticked' : ''}">
+      <label class="tick"><input type="checkbox" data-key="${esc(key)}" ${on ? 'checked' : ''} aria-label="Tick off ${esc(a.title)}"><span></span></label>
+      <div><b>${esc(a.title)}</b><small><span style="color:${s.c1}">${esc(s.short)}</span> ${esc(a.kind)}. ${when}</small></div>
+      ${actionFor(a)}</div>`;
+  }
+  document.getElementById('agenda-list').innerHTML = html || `<p class="inbox-empty">${tab === 'late' ? 'Nothing overdue.' : 'Nothing to do here. Enjoy the break.'}</p>`;
+}
+function toggleAgenda(open) {
+  const box = document.getElementById('agenda');
+  if (!box || open === !box.hidden) return;
+  if (open) { toggleInbox(false); renderAgenda(); }
+  box.hidden = !open;
+  document.body.classList.toggle('agenda-open', open);
+  (open ? box.querySelector('.x') : document.getElementById('agenda-btn'))?.focus();
+}
+
+function inboxItems() {
+  const ann = D.announcements.map(a => ({
+    kind: 'ann', icon: 'megaphone', title: a.title, text: a.message, by: [a.by, titleCase(a.subject)].filter(Boolean).join(' · '),
+    at: a.at, href: lmsUrl('/announcement'),
+  }));
+  const upd = D.notifications.map(n => ({
+    kind: 'upd', icon: /fa|sa|eol|test|assess/.test(n.type || '') ? 'tasks' : 'bell', title: n.title, text: n.message, by: n.actor,
+    at: n.at, unread: !n.read, href: lmsUrl(n.link || '/notification'),
+  }));
+  const msg = (D.threads || []).map(t => ({
+    kind: 'msg', title: t.name, role: t.role, text: t.last, at: t.at, href: lmsUrl('/messaging'),
+  }));
+  return { ann, upd, msg, all: [...ann, ...upd, ...msg].sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0)) };
+}
+function renderInbox(tab = 'all') {
+  const items = inboxItems();
+  const tabs = [['all', 'All'], ['ann', 'Announcements'], ['upd', 'Updates'], ['msg', 'Messages']];
+  document.getElementById('inbox-tabs').innerHTML = tabs.map(([k, l]) =>
+    `<button role="tab" data-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${l}<span>${items[k].length}</span></button>`).join('');
+  const row = x => `<a class="inbox-item ${x.unread ? 'unread' : ''}" href="${esc(x.href)}" target="_blank" rel="noopener">
+      ${x.kind === 'msg' ? `<span class="avatar">${initials(x.title)}</span>` : `<span class="inbox-ic ${x.kind}">${icon(x.icon, 16)}</span>`}
+      <div><b>${esc(x.title)}${x.role ? ` <span class="pill grey">${esc(titleCase(String(x.role).toLowerCase()))}</span>` : ''}</b>
+      ${x.text ? `<p>${esc(x.text)}</p>` : ''}<small>${x.kind === 'msg' ? 'Message' : esc(x.by || '')}${x.at ? ' · ' + ago(x.at) : ''}</small></div></a>`;
+  const empty = { all: 'Nothing new.', ann: 'No announcements.', upd: 'No updates.', msg: 'No messages yet. Start a chat with a teacher on Indus LMS.' };
+  document.getElementById('inbox-list').innerHTML = items[tab].slice(0, 40).map(row).join('') || `<p class="inbox-empty">${empty[tab]}</p>`;
+}
+function toggleInbox(open) {
+  const box = document.getElementById('inbox');
+  if (!box || open === !box.hidden) return;
+  if (open) { toggleAgenda(false); renderInbox(); }
+  box.hidden = !open;
+  document.body.classList.toggle('inbox-open', open);
+  (open ? box.querySelector('.x') : document.getElementById('bell'))?.focus();
 }
 
 const initials = n => (n || '?').split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
