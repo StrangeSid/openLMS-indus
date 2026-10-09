@@ -4,10 +4,31 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
 import lms
+
+# Shared pools: one for the top-level section fan-out, one for the
+# resource folder crawl. Previously each /data.js hit built a pool per
+# call and resource_tree() built a pool per page per level.
+_POOL_WORKERS = int(os.environ.get("OPENLMS_POOL_WORKERS", "16"))
+_POOL: ThreadPoolExecutor | None = None
+_POOL_LOCK = None
+
+
+def _pool() -> ThreadPoolExecutor:
+    global _POOL, _POOL_LOCK
+    import threading
+
+    if _POOL is None:
+        if _POOL_LOCK is None:
+            _POOL_LOCK = threading.Lock()
+        with _POOL_LOCK:
+            if _POOL is None:
+                _POOL = ThreadPoolExecutor(max_workers=_POOL_WORKERS, thread_name_prefix="openlms")
+    return _POOL
 
 
 def clean_name(s: str | None) -> str:
@@ -18,21 +39,73 @@ def strip_html(s: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
 
 
-def resource_tree(tok: str, tid: str, parent: str | None = None, depth: int = 0) -> list[dict]:
+def _resource_page(tok: str, tid: str, parent: str | None, page: int) -> dict:
+    """One resource listing. Never raises: the LMS sometimes answers with
+    an empty/non-JSON body (stale token, gateway blip); callers treat that
+    as an empty page so one bad folder can't 500 the whole page."""
+    try:
+        data = lms.list_resources(tok, tid, None, parent, page, 100)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _walk(tok: str, tid: str, folder_id: str, depth: int, ex: ThreadPoolExecutor) -> list[dict]:
+    """Fetch one folder's children (single page loop), recursing via shared pool.
+
+    Returns whatever was collected before a failure; never raises.
+    """
     items, page = [], 1
     while True:
-        data = lms.list_resources(tok, tid, None, parent, page, 100)
-        results = data.get("results") or []
-        if parent is None:
-            results = [r for r in results if not r.get("parent_resource_id")] or results
-        folders = [r for r in results if r.get("is_folder") and depth < 6]
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            for r, children in zip(folders, pool.map(lambda f: resource_tree(tok, tid, f["id"], depth + 1), folders)):
-                r["children"] = children
-        items += results
+        data = _resource_page(tok, tid, folder_id, page)
+        batch = data.get("results") or []
+        sub = [r for r in batch if r.get("is_folder") and depth < 6]
+        if sub:
+            try:
+                children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), sub))
+            except Exception:
+                children = [[] for _ in sub]
+            for r, c in zip(sub, children):
+                r["children"] = c
+        items += batch
         if not data.get("next"):
             return items
         page += 1
+
+
+def resource_tree(tok: str, tid: str, parent: str | None = None, depth: int = 0) -> list[dict]:
+    """Full resource tree. One shared pool for the whole crawl (was: a pool
+    per page per level). Top-level keeps the parent-less filter."""
+    ex = _pool()
+    items, page = [], 1
+    while True:
+        data = _resource_page(tok, tid, parent, page)
+        batch = data.get("results") or []
+        if parent is None:
+            batch = [r for r in batch if not r.get("parent_resource_id")] or batch
+        folders = [r for r in batch if r.get("is_folder") and depth < 6]
+        if folders:
+            try:
+                children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), folders))
+            except Exception:
+                children = [[] for _ in folders]
+            for r, c in zip(folders, children):
+                r["children"] = c
+        items += batch
+        if not data.get("next"):
+            return items
+        page += 1
+
+
+def shape_resources(files: list[dict], live: bool = False) -> list[dict]:
+    """Shape raw file rows into the UI `resources` list.
+
+    In live mode every file gets a `path` served by the backend's file proxy.
+    """
+    if live:
+        for f in files:
+            f["path"] = f"api/files/{f['id']}/{f['file_id']}"
+    return [{k: v for k, v in f.items() if k not in ("id", "file_id", "dir")} for f in files]
 
 
 def flatten(items: list[dict], folders: tuple[str, ...] = ()) -> list[dict]:
@@ -102,15 +175,13 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
     }
     if files is None:
         calls["files"] = (lambda: flatten(resource_tree(tok, tid)), [])
-    with ThreadPoolExecutor(max_workers=len(calls)) as pool:
-        r = dict(zip(calls, pool.map(lambda c: safe(*c), calls.values())))
+    ex = _pool()
+    r = dict(zip(calls, ex.map(lambda c: safe(*c), calls.values())))
     files = r.get("files", files)
     courses_raw, notes, att = r["courses"] or {}, r["notes"] or {}, r["att"] or {}
     courses = [c for c in courses_raw.get("courses", []) if c.get("title") != "Assembly"]
     grade = next((cl.get("grade") for c in courses for cl in c.get("classes") or [] if cl.get("grade")), "")
-    if live:
-        for f in files:
-            f["path"] = f"api/files/{f['id']}/{f['file_id']}"
+    resources = shape_resources(files, live)
 
     return {
         "live": live,
@@ -151,6 +222,7 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
         "notifications": [{
             "title": n["title"], "message": n.get("message"), "type": n.get("type"),
             "actor": n.get("actor_name"), "at": n.get("created_at"), "read": n.get("is_read"), "link": n.get("link"),
+            "courseId": n.get("course_id"),
         } for n in results(notes)[:25]],
         "attendance": {
             **{k: att.get(k) for k in ("total_sessions", "present", "absent", "late", "percentage")},
@@ -164,6 +236,6 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
         "calendar": sorted(({
             "date": e["date"], "end": e.get("end_date"), "type": e.get("type"), "label": e.get("comment"),
         } for e in (r["calendar"] or {}).get("events", [])), key=lambda e: e["date"]),
-        "resources": [{k: v for k, v in f.items() if k not in ("id", "file_id", "dir")} for f in files],
+        "resources": resources,
         "downloaded": live or any("path" in f for f in files),
     }

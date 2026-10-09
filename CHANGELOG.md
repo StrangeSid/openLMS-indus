@@ -5,6 +5,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Persistent server-side sessions (`openlms/sessions.py`): opaque HttpOnly session cookie + SQLite store (0600, `OPENLMS_SESSION_FILE`, `:memory:` for ephemeral). Restarts no longer sign everyone out. Optional `OPENLMS_SECRET_KEY` Fernet-encrypts tokens at rest; rotated secrets force re-login. Refreshed tokens are saved back to disk.
+- Persistent data cache (`openlms/cache.py` + `web/assets/cache.js`): per-student in-process payload cache with singleflight (navigation no longer rebuilds on every click), mixed TTLs (`OPENLMS_DATA_TTL` + `OPENLMS_FILES_TTL` for the slow resource crawl), shared fetch pool, `ETag`/`304` with `private` HTTP caching, `?sections=` slices and `?refresh=` escape hatch, browser `localStorage` stale fallback cleared on logout, livelier login progress messages.
+- JSON `GET /api/data` mirroring `/data.js` (same `sections`/`refresh`/`ETag` semantics) plus files-only partial refresh: `?refresh=1&sections=resources,resourcesStale` recrawls just the files and patches the cached payload, so the Library and class file lists hot-swap in place with an "Updating resources…" banner instead of reloading.
+
+### Fixed
+
+- CSRF guard now honours `OPENLMS_PUBLIC_HOST` (comma-separated): POSTs whose Origin matches a configured public hostname are allowed even when the Host header seen by the app differs (Cloudflare/ngrok Host rewrite). Evil origins are still blocked.
+- Resource crawl no longer 500s `/data.js` when the LMS answers a folder listing (or token refresh / login) with an empty/non-JSON body: bad pages degrade to partial/empty resources with stale fallback instead of crashing the page. `/data.js` now carries `resourcesStale`, and pages show an "Updating resources…" banner with a one-shot background retry instead of silently rendering old files.
+- Page-switch flicker removed: a boot skeleton matching the sidebar/topbar geometry paints synchronously before `data.js` (swapped out with no layout shift), and the Manrope font loads via head `<link>`s instead of a render-blocking CSS `@import`.
+- Indus LMS deep links: EOL/FA/SA buttons now open the subject hub (`/assignments?courseId=&classId=`) instead of `/assignments/test/<kind>?subject=&course_id=`. The test pages ignore course params in the URL and filter by the localStorage-selected course, so the old links showed 0 tests whenever storage held another subject. The hub reads the course from the URL and is one click from the test lists.
+- Learning-task links use `?courseId=` (camelCase), which `/studentassignment` actually reads.
+- Notification links resolve to the subject hub when the course is known (by id or link slug) instead of opening raw `/assignments/test/<slug>/<kind>` links.
+- Resource links include the required subject slug (`/courses/:id/resources/:slug`); slug-less URLs render a Network Error on Indus.
+- Notifications payload now carries `courseId` for link resolution.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added

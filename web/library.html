@@ -4,6 +4,9 @@
 <title>Library · openLMS</title>
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px); }
   .head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -52,16 +55,36 @@
   </main>
 </div>
 <aside class="drawer" id="drawer"></aside>
+<script src="assets/cache.js"></script>
 <script src="data.js"></script>
-<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
 mountChrome('files', null, `Search ${D.resources.length} files by name, teacher, folder…`);
-const R = D.resources.map((r, i) => ({ ...r, i, kind: fileKind(r.name), s: subj(r.subject) }));
+let R, subjects, types;
+function reindex() {
+  R = D.resources.map((r, i) => ({ ...r, i, kind: fileKind(r.name), s: subj(r.subject) }));
+  subjects = [...new Map(R.map(r => [r.s.key, r.s])).values()];
+  types = [...new Set(R.map(r => r.kind.label))];
+  document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? ' · saved to Downloads/induslms' : ''}`;
+  const qb = document.getElementById('q');
+  if (qb) qb.placeholder = `Search ${R.length} files by name, teacher, folder…`;
+}
 let fSubj = 'all', fType = 'all', view = 'grid', q = '';
-const subjects = [...new Map(R.map(r => [r.s.key, r.s])).values()];
-const types = [...new Set(R.map(r => r.kind.label))];
-document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? ' · saved to Downloads/induslms' : ''}`;
+reindex();
+// Hot-swap for the stale-resources banner: refresh just the files slice
+// and re-render in place. Resolves true when resources are current.
+window.__lmsRefreshResources = async () => {
+  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
+  if (!r.ok) return false;
+  const data = await r.json();
+  D.resources = data.resources || [];
+  D.resourcesStale = !!data.resourcesStale;
+  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  reindex();
+  render();
+  return !D.resourcesStale;
+};
 function chips() {
   document.getElementById('chips').innerHTML = `<button class="chip ${fSubj === 'all' ? 'on' : ''}" data-s="all" style="${fSubj === 'all' ? 'color:var(--brand)' : ''}">All subjects</button>` +
     subjects.map(s => `<button class="chip ${fSubj === s.key ? 'on' : ''}" data-s="${s.key}" style="${fSubj === s.key ? 'color:' + s.c1 : ''}"><i style="background:${s.c1}"></i>${esc(s.short)} <span class="muted">${R.filter(r => r.s.key === s.key).length}</span></button>`).join('');
@@ -84,7 +107,7 @@ function open(r) {
     <h3 style="font-size:18px">${esc(r.title)}</h3>
     <dl><dt>Subject</dt><dd>${esc(titleCase(r.subject))}</dd><dt>Folder</dt><dd>${esc(r.folder || '—')}</dd><dt>Teacher</dt><dd>${esc(r.teacher || '—')}</dd><dt>File</dt><dd style="word-break:break-all">${esc(r.name)}</dd></dl>
     ${r.path ? `<a class="btn" style="text-align:center" href="${encodeURI(r.path)}" target="_blank">Open file</a>` : ''}
-    ${extLink(lmsUrl(courseFor(r.subject)?.id ? `/courses/${courseFor(r.subject).id}/resources` : '/resources'), 'View on Indus LMS')}</div>`;
+    ${extLink(resourceLinkFor(r.subject), 'View on Indus LMS')}</div>`;
   d.classList.add('open');
   document.getElementById('x').onclick = () => d.classList.remove('open');
 }

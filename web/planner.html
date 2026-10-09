@@ -4,6 +4,9 @@
 <title>Planner · openLMS</title>
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px); display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 420px); gap: clamp(20px, 2vw, 32px); }
   .cal { padding: 18px; }
@@ -52,8 +55,9 @@
     </aside>
   </main>
 </div>
+<script src="assets/cache.js"></script>
 <script src="data.js"></script>
-<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
 mountChrome('calendar', null, 'Search events and deadlines…');

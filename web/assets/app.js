@@ -1,6 +1,55 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 const D = window.LMS;
 const TODAY = new Date();
+// Persist for offline/stale fallback (server stays source of truth).
+try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+
+// Stale-resources banner: the server sets D.resourcesStale when the file
+// crawl failed and the page rendered reused/empty resources. Keep the stale
+// files visible under a thin banner. Pages showing files (Library, class)
+// expose window.__lmsRefreshResources to hot-swap fresh files in place;
+// other pages fall back to one background refresh + reload, then manual
+// retry, so a long LMS outage can't trap the page in a reload loop.
+// Runs on DOMContentLoaded so page hooks (defined after this file) exist.
+(function () {
+  function run() {
+    if (!D || !D.resourcesStale || !D.live) return;
+    var KEY = 'openlms.res-retry';
+    var bar = document.createElement('div');
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;font-size:12px;font-weight:700;background:var(--accent-soft,#FDF1DC);color:#9A6514;border-bottom:1px solid var(--line,#e5e7eb)';
+    document.body.insertAdjacentElement('afterbegin', bar);
+    function showRetry(msg) {
+      bar.innerHTML = msg + ' <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
+      var b = document.getElementById('resretry');
+      if (b) b.onclick = function () {
+        try { sessionStorage.removeItem(KEY); } catch (x) {}
+        location.reload();
+      };
+    }
+    if (typeof window.__lmsRefreshResources === 'function') {
+      bar.textContent = 'Updating resources…';
+      window.__lmsRefreshResources().then(function (ok) {
+        if (ok) {
+          bar.textContent = 'Resources updated.';
+          setTimeout(function () { bar.remove(); }, 2500);
+        } else showRetry('Resources may be outdated.');
+      }).catch(function () { showRetry('Couldn’t update resources.'); });
+      return;
+    }
+    var retried = false;
+    try { retried = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
+    if (!retried) {
+      bar.textContent = 'Updating resources…';
+      try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+      fetch('data.js?refresh=1', { cache: 'no-store' }).then(function () {
+        location.reload();
+      }).catch(function () { showRetry('Couldn’t update resources.'); });
+    } else showRetry('Resources may be outdated.');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
 
 const SUBJECTS = [
   { key: 'math', match: /math/i, short: 'Maths', c1: '#5B4FCF', c2: '#ECEAFB', glyph: 'Σ' },
@@ -88,13 +137,74 @@ function courseFor(subject) {
   const key = subj(subject).key;
   return D.courses.find(c => subj(c.title).key === key);
 }
-function lmsLinkFor(kind, subject) {
+// Mirrors Indus LMS `toSubjectSlug`: lowercase, spaces to dashes, strip
+// anything outside [a-z0-9-]. Used for /courses/:id/resources/:slug links,
+// which need the slug (slug-less URLs render a Network Error on Indus).
+const slugify = s => (s || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-');
+function hubQs(course) {
   const q = new URLSearchParams();
-  if (subject && subject.toLowerCase() !== 'general') q.set('subject', subject);
+  if (course?.id) q.set('courseId', course.id);
+  if (course?.classId) q.set('classId', course.classId);
+  return q.toString() ? `?${q}` : '';
+}
+// Subject hub: reads ?courseId=&classId= from the URL and repairs Indus
+// localStorage, so it never shows the wrong subject. One click from EOL/FA/SA.
+function hubLinkFor(subject) {
+  const course = typeof subject === 'object' ? subject : courseFor(subject);
+  return lmsUrl(`/assignments${hubQs(course)}`);
+}
+// Resource library: course id comes from the path, so it works cross-origin,
+// but the trailing :slug segment is required.
+function resourceLinkFor(subject) {
   const course = courseFor(subject);
-  if (course?.id) q.set('course_id', course.id);
-  const base = kind === 'task' ? '/studentassignment' : `/assignments/test/${kind}`;
-  return lmsUrl(q.toString() ? `${base}?${q}` : base);
+  if (!course?.id) return lmsUrl('/resources');
+  const slug = slugify(course.title);
+  return lmsUrl(slug ? `/courses/${course.id}/resources/${slug}` : `/courses/${course.id}/resources`);
+}
+// Notification links from the LMS API look like
+// `/assignments/test/<slug>/<eol|fa|sa>` with no course context, so opening
+// them raw hits the same stale-storage trap as the old test links. Resolve to
+// the subject hub when the course is known (by id or by slug in the link).
+function notifLinkFor(n) {
+  const raw = n.link || '';
+  const m = raw.match(/^\/?assignments\/test\/([^/?#]+)(?:\/([^/?#]+))?/i);
+  const type = (m?.[2] || m?.[1] || '').toLowerCase();
+  const isTest = ['eol', 'fa', 'sa'].includes(type);
+  let course = (n.courseId && D.courses.find(c => c.id === n.courseId))
+    || (n.course_id && D.courses.find(c => c.id === n.course_id));
+  if (!course && m?.[1] && !['eol', 'fa', 'sa'].includes(m[1].toLowerCase())) {
+    const slug = m[1].toLowerCase();
+    course = D.courses.find(c => slugify(c.title) === slug);
+  }
+  if (!course && n.subject) course = courseFor(n.subject);
+  if (course?.id && (isTest || !m)) return lmsUrl(`/assignments${hubQs(course)}`);
+  if (course?.id && raw.startsWith('/courses/')) return resourceLinkFor(course.title);
+  return lmsUrl(raw || '/notification');
+}
+function lmsLinkFor(kind, subject) {
+  const course = courseFor(subject);
+  const q = new URLSearchParams();
+  if (course?.id) q.set('courseId', course.id);
+  if (course?.classId) q.set('classId', course.classId);
+  const qs = q.toString() ? `?${q}` : '';
+  // Learning tasks: /studentassignment reads ?courseId= (camelCase) from the
+  // URL, so a direct deep link works.
+  if (kind === 'task') {
+    const tq = new URLSearchParams();
+    if (course?.id) tq.set('courseId', course.id);
+    return lmsUrl(`/studentassignment${tq.toString() ? `?${tq}` : ''}`);
+  }
+  // EOL/FA/SA: the test pages ignore ?course_id=/courseId= in the URL and
+  // filter by localStorage-selected course instead, so a direct
+  // /assignments/test/eol?subject=&course_id= link shows 0 tests whenever
+  // storage holds another subject (verified live). Link to the subject hub
+  // instead — it reads ?courseId=&classId= from the URL, repairs storage,
+  // and is one click from the EOL/FA/SA lists.
+  if (course?.id) return lmsUrl(`/assignments${qs}`);
+  // Unknown subject: fall back to the test hub, keeping ?subject= for the
+  // client-side subject filter (works when the server returns the full list).
+  const s = (subject && subject.toLowerCase() !== 'general') ? subject : '';
+  return lmsUrl(s ? `/assignments/test/${kind}?subject=${encodeURIComponent(s)}` : `/assignments/test/${kind}`);
 }
 const extLink = (href, label, cls = 'btn ghost') =>
   `<a class="${cls} ext" href="${esc(href)}" target="_blank" rel="noopener">${label} ${icon('external', 13)}</a>`;
@@ -127,10 +237,12 @@ function topbar(placeholder = 'Search assignments, classes, files…') {
     <button class="bell" id="bell" onclick="toggleInbox(true)" aria-label="Open inbox" aria-haspopup="dialog" aria-controls="inbox">${icon('bell')}${D.unread ? `<b>${D.unread > 99 ? '99+' : D.unread}</b>` : ''}</button><span class="avatar" title="${esc(D.student)}">${initials(D.student)}</span></header>`;
 }
 async function signOut() {
+  try { window.__lmsClear && window.__lmsClear(); } catch (e) {}
   await fetch('api/logout', { method: 'POST' }).catch(() => {});
   location.replace('login.html');
 }
 function mountChrome(active, activeClass, placeholder) {
+  const boot = document.getElementById('boot'); if (boot) boot.remove();
   const fav = document.createElement('link'); fav.rel = 'icon'; fav.href = 'data:image/svg+xml,' + encodeURIComponent(LOGO.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
   document.head.appendChild(fav);
   document.body.insertAdjacentHTML('afterbegin', sidebar(active, activeClass));

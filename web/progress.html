@@ -4,6 +4,9 @@
 <title>Progress · openLMS</title>
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px); display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 460px); gap: clamp(20px, 2vw, 32px); }
   .profile { grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; padding: 22px 24px; overflow: hidden; position: relative; }
@@ -51,8 +54,9 @@
       <div class="scroll" id="feed"></div></section>
   </main>
 </div>
+<script src="assets/cache.js"></script>
 <script src="data.js"></script>
-<script>window.LMS || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
 mountChrome('progress', null);
@@ -72,14 +76,14 @@ const max = Math.max(...Object.values(by).map(b => b.total));
 document.getElementById('bars').innerHTML = Object.entries(by).sort((a, b) => b[1].total - a[1].total).map(([k, b]) => `
   <div class="row"><b style="font-size:13px">${esc(k)}</b><div class="track" style="width:${b.total / max * 100}%"><span style="width:${b.done / b.total * 100}%;background:${b.s.c1}"></span><span style="flex:1;background:${b.s.c2}"></span></div><span class="n">${b.done} / ${b.total}</span></div>`).join('');
 const feed = [
-  ...D.notifications.map(n => ({ kind: 'n', type: n.type, title: n.title, msg: n.message, by: n.actor, at: n.at, unread: !n.read, link: n.link })),
+  ...D.notifications.map(n => ({ kind: 'n', type: n.type, title: n.title, msg: n.message, by: n.actor, at: n.at, unread: !n.read, link: n.link, courseId: n.courseId })),
   ...D.announcements.map(a => ({ kind: 'ann', type: 'ann', title: a.title, msg: a.message, by: a.by, at: a.at, unread: false })),
 ].sort((a, b) => new Date(b.at) - new Date(a.at));
 document.getElementById('unread').textContent = `${D.unread} unread`;
 const ic = t => t === 'ann' ? ['megaphone', '#E3F2EF', '#0B5A54'] : /fa|test|eol|assess/.test(t) ? ['tasks', '#FBE6E6', '#D64545'] : ['sparkle', '#E5EDFB', '#3B6FD8'];
 function renderFeed(f) {
   document.getElementById('feed').innerHTML = feed.filter(x => f === 'all' || (f === 'unread' ? x.unread : f === 'ann' ? x.kind === 'ann' : x.kind === 'n' && /fa|test|eol|assess/.test(x.type)))
-    .slice(0, 40).map(x => { const [i, bg, c] = ic(x.type); return `<div class="n-item ${x.unread ? 'unread' : ''}"><span class="n-ic" style="background:${bg};color:${c}">${icon(i, 16)}</span><div style="flex:1;min-width:0"><b>${esc(x.title)}</b><p>${esc(x.msg)}</p><small>${esc(x.by || '')} · ${ago(x.at)}</small></div>${x.link ? extLink(lmsUrl(x.link), 'Open') : ''}</div>`; }).join('');
+    .slice(0, 40).map(x => { const [i, bg, c] = ic(x.type); return `<div class="n-item ${x.unread ? 'unread' : ''}"><span class="n-ic" style="background:${bg};color:${c}">${icon(i, 16)}</span><div style="flex:1;min-width:0"><b>${esc(x.title)}</b><p>${esc(x.msg)}</p><small>${esc(x.by || '')} · ${ago(x.at)}</small></div>${x.link ? extLink(notifLinkFor(x), 'Open') : ''}</div>`; }).join('');
 }
 renderFeed('all');
 document.getElementById('ftabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; document.querySelectorAll('#ftabs button').forEach(x => x.classList.toggle('on', x === b)); renderFeed(b.dataset.f); };

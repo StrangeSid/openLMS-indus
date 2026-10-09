@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import base64
 import json
+import os
 import sys
 import time
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+os.environ.setdefault("OPENLMS_SESSION_FILE", ":memory:")
 
 try:
     from fastapi.testclient import TestClient
@@ -42,14 +44,17 @@ USER = {"full_name": "Test Student", "email": "s@school.test", "roles": [{"tenan
 @unittest.skipUnless(TestClient, "server dependencies not installed")
 class AppTest(unittest.TestCase):
     def setUp(self):
-        server.sessions = server.Store()
+        server.sessions = server.Store(":memory:")
+        server.datacache.clear()
         server.attempts.clear()
         server.WARM_ON_LOGIN = False
         self.client = TestClient(server.app, base_url="https://testserver")
-        self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live: {"live": live, "tok": tok}).start()
+        self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok}).start()
+        self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
         self.post = mock.patch.object(server.requests, "post").start()
         self.get = mock.patch.object(server.requests, "get").start()
         self.addCleanup(mock.patch.stopall)
+        self.addCleanup(server.sessions.close)
 
     def sign_in(self, access=None):
         self.post.return_value = FakeResponse(200, {"access": access or jwt(time.time() + 3600), "refresh": "r", "user": USER})
@@ -71,7 +76,8 @@ class AppTest(unittest.TestCase):
         data = self.client.get("/data.js")
         self.assertTrue(data.text.startswith("window.LMS = "))
         self.assertIn('"live": true', data.text)
-        self.assertEqual(data.headers["cache-control"], "no-store")
+        self.assertIn("private", data.headers["cache-control"])
+        self.assertIn("etag", [k.lower() for k in data.headers])
         self.assertEqual(self.client.get("/api/session").json()["name"], "Test Student")
 
     def test_bad_password(self):
@@ -111,6 +117,18 @@ class AppTest(unittest.TestCase):
         self.assertEqual(r.status_code, 301)
         self.assertEqual(r.headers["location"], "/assets/favicon.svg")
         self.assertEqual(self.client.get("/favicon.ico").headers["content-type"], "image/svg+xml")
+
+    def test_public_host_allowlisted(self):
+        # lms.sidevv.xyz is allowed by default: Cloudflare Origin Rule rewrites
+        # Host to the ngrok origin, so Origin/Host never match without this.
+        headers = {"origin": "https://lms.sidevv.xyz"}
+        self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 200)
+        with mock.patch.object(server, "PUBLIC_HOSTS", set()):
+            self.assertEqual(self.client.post("/api/logout", headers=headers).status_code, 403)
+        # X-Forwarded-Host from Cloudflare/ngrok also satisfies the guard.
+        with mock.patch.object(server, "PUBLIC_HOSTS", set()):
+            fwd = {"origin": "https://lms.sidevv.xyz", "x-forwarded-host": "lms.sidevv.xyz"}
+            self.assertEqual(self.client.post("/api/logout", headers=fwd).status_code, 200)
 
     def test_exported_files_not_served(self):
         self.assertEqual(self.client.get("/files/Physics/notes.pdf").status_code, 404)

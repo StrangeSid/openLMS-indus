@@ -4,7 +4,9 @@
     uvicorn openlms.app:app --port 8000
 
 Passwords are forwarded to Indus LMS once and never stored. Each student's
-tokens live only in this process's memory, keyed by a random session cookie.
+tokens rest server-side in a SQLite file (0600, optional Fernet encryption
+via OPENLMS_SECRET_KEY), keyed by a random HttpOnly session cookie, so a
+restart no longer signs everyone out.
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ import base64
 import json
 import os
 import re
-import secrets
 import threading
 import time
 from pathlib import Path
@@ -25,57 +26,29 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from openlms.data import build
+from openlms.data import build, flatten, resource_tree, shape_resources
+from openlms.sessions import Session, Store
+from openlms import cache as datacache
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 COOKIE = "openlms_sid"
 DEMO_COOKIE = "openlms_demo"
 LMS_WEB = "https://induslms.com"
 SESSION_IDLE = 12 * 3600
-DATA_TTL = int(os.environ.get("OPENLMS_DATA_TTL", "300"))
 WARM_ON_LOGIN = True
 LOGIN_LIMIT = (10, 600)  # attempts per window (seconds), per client IP
 UUIDISH = re.compile(r"^[0-9a-fA-F-]{8,64}$")
+# Public hostnames the app is served under (e.g. behind Cloudflare/ngrok where
+# the Host header seen by the app differs from the browser's Origin).
+# Comma-separated extra hosts, e.g. OPENLMS_PUBLIC_HOST=example.com
+# lms.sidevv.xyz is always allowed because the Cloudflare Origin Rule rewrites
+# Host to the ngrok origin, so Origin/Host can never match without this.
+PUBLIC_HOSTS = {"lms.sidevv.xyz"} | {
+    h.strip().lower() for h in os.environ.get("OPENLMS_PUBLIC_HOST", "").split(",") if h.strip()
+}
 
 
-class Session:
-    def __init__(self, access: str, refresh: str, tenant: str, user: dict):
-        self.access, self.refresh, self.tenant = access, refresh, tenant
-        self.name = user.get("full_name") or user.get("email")
-        self.email = user.get("email")
-        self.seen = time.time()
-        self.data: tuple[float, dict] | None = None
-        self.lock = threading.Lock()
-        self.build_lock = threading.Lock()
-
-
-class Store:
-    def __init__(self):
-        self._s: dict[str, Session] = {}
-        self._lock = threading.Lock()
-
-    def add(self, s: Session) -> str:
-        sid = secrets.token_urlsafe(32)
-        with self._lock:
-            self._s[sid] = s
-        return sid
-
-    def get(self, sid: str | None) -> Session | None:
-        with self._lock:
-            now = time.time()
-            for k in [k for k, v in self._s.items() if now - v.seen > SESSION_IDLE]:
-                del self._s[k]
-            s = self._s.get(sid or "")
-            if s:
-                s.seen = now
-            return s
-
-    def drop(self, sid: str | None) -> None:
-        with self._lock:
-            self._s.pop(sid or "", None)
-
-
-sessions = Store()
+sessions = Store(idle=SESSION_IDLE)
 attempts: dict[str, list[float]] = {}
 app = FastAPI(title="openLMS", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -95,24 +68,101 @@ def fresh(s: Session) -> str:
             return s.access
         r = requests.post(f"{lms.API_BASE}/api/token/refresh/", json={"refresh": s.refresh},
                           headers=lms.HEADERS_BASE, timeout=15)
-        if not r.ok or "access" not in r.json():
+        try:
+            body = r.json()
+            refreshed = r.ok and "access" in body
+        except Exception:
+            refreshed = False  # empty/non-JSON body: treat like a failed refresh
+        if not refreshed:
             raise HTTPException(401, "Session expired. Sign in again.")
-        body = r.json()
         s.access, s.refresh = body["access"], body.get("refresh", s.refresh)
+        try:
+            sessions.save(s)
+        except Exception:
+            pass
         return s.access
 
 
-def live_data(s: Session, refresh: bool = False) -> dict:
-    """Build (or reuse) the student's data; concurrent requests wait for one build."""
-    with s.build_lock:
-        if refresh or not s.data or time.time() - s.data[0] > DATA_TTL:
-            s.data = (time.time(), build(fresh(s), s.tenant, live=True))
-        return s.data[1]
+PARTIAL_SECTIONS = {"resources", "resourcesStale"}
+
+
+def live_data(s: Session, refresh: bool = False, only: set[str] | None = None) -> dict:
+    """Shared cached payload keyed by session id (singleflight).
+
+    Mixed TTLs: the slow resource crawl is reused from cache while the
+    rest rebuilds. Concurrent tabs wait on one per-sid lock.
+    With `refresh` and `only` limited to the resources slice, only the
+    file crawl rebuilds and the cached payload is patched in place —
+    the cheap path behind the Library hot-swap.
+    """
+    entry = datacache.get_entry(s.sid)
+    if entry is None:  # no sid (tests): direct build, no caching
+        return build(fresh(s), s.tenant, live=True)
+    with entry.lock:
+        if refresh and only and only <= PARTIAL_SECTIONS:
+            return _refresh_files_only(entry, s)
+        hit = datacache.get_payload(entry, refresh=refresh)
+        if hit is not None:
+            return hit
+        files = None if refresh else datacache.get_files(entry)
+        files_stale = False
+        token, tenant = fresh(s), s.tenant
+        if files is None:
+            try:
+                files = flatten(resource_tree(token, tenant))
+            except Exception:
+                # A failing crawl must not 500 the page: reuse stale files
+                # when available, else render without resources. Only a
+                # successful crawl refreshes the files timestamp, so the
+                # next rebuild retries. Either way the payload is flagged
+                # so the UI can banner + retry.
+                files = datacache.get_files(entry, allow_stale=True)
+                if files is None:
+                    files = []
+                files_stale = True
+            else:
+                datacache.put_files(entry, files)
+        payload = build(token, tenant, files=files, live=True)
+        payload["resourcesStale"] = files_stale
+        datacache.put_payload(entry, payload)
+        return payload
+
+
+def _refresh_files_only(entry, s: Session) -> dict:
+    """Rebuild just the resources slice; patch it into the cached payload."""
+    token, tenant = fresh(s), s.tenant
+    try:
+        files = flatten(resource_tree(token, tenant))
+    except Exception:
+        files = datacache.get_files(entry, allow_stale=True)
+        if files is None:
+            files = []
+        stale = True
+    else:
+        datacache.put_files(entry, files)
+        stale = False
+    base = datacache.get_payload(entry)
+    if base is None:  # cold cache: fall back to a full build
+        payload = build(token, tenant, files=files, live=True)
+    else:
+        payload = dict(base)
+        payload["resources"] = shape_resources(files, live=True)
+    payload["resourcesStale"] = stale
+    datacache.put_payload(entry, payload)
+    return payload
 
 
 def warm(s: Session) -> None:
-    if WARM_ON_LOGIN:
-        threading.Thread(target=lambda: _quiet(live_data, s), daemon=True).start()
+    if WARM_ON_LOGIN and s.sid:
+        sid = s.sid
+        def _fill() -> None:
+            try:
+                sess = sessions.get(sid)
+                if sess:
+                    _quiet(live_data, sess)
+            except Exception:
+                pass
+        threading.Thread(target=_fill, daemon=True).start()
 
 
 def _quiet(fn, *args) -> None:
@@ -141,7 +191,15 @@ async def guard(request: Request, call_next):
         return PlainTextResponse("Not found", 404)
     if request.method not in ("GET", "HEAD") and path.startswith("/api/"):
         origin = request.headers.get("origin")
-        if origin and origin.split("://", 1)[-1] != request.headers.get("host"):
+        host = (request.headers.get("host") or "").lower()
+        forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip().lower()
+        origin_host = origin.split("://", 1)[-1].lower() if origin else ""
+        if (
+            origin
+            and origin_host != host
+            and origin_host != forwarded_host
+            and origin_host not in PUBLIC_HOSTS
+        ):
             return JSONResponse({"detail": "Cross-site request blocked."}, 403)
     response = await call_next(request)
     if not path.startswith("/api/") and response.status_code in (200, 304):
@@ -169,7 +227,10 @@ def login(creds: Credentials, request: Request, response: Response):
                           json={"email": creds.email.strip(), "password": creds.password})
     except requests.RequestException:
         raise HTTPException(502, "Couldn't reach Indus LMS. Try again shortly.")
-    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    try:
+        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(502, "Indus LMS gave an unreadable reply. Try again shortly.")
     if not r.ok or "access" not in body:
         raise HTTPException(401, "Email or password is incorrect.")
 
@@ -179,8 +240,14 @@ def login(creds: Credentials, request: Request, response: Response):
     if not tenant:
         raise HTTPException(403, "This account has no school attached.")
     sid = sessions.add(Session(body["access"], body.get("refresh", ""), tenant, user))
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    is_secure = (
+        request.url.scheme == "https"
+        or forwarded_proto == "https"
+        or os.environ.get("OPENLMS_SECURE_COOKIES") == "1"
+    )
     response.set_cookie(COOKIE, sid, httponly=True, samesite="lax", max_age=SESSION_IDLE,
-                        secure=request.url.scheme == "https" or os.environ.get("OPENLMS_SECURE_COOKIES") == "1")
+                        secure=is_secure)
     attempts.pop(ip, None)
     response.delete_cookie(DEMO_COOKIE)
     response.headers["Cache-Control"] = "no-store"
@@ -192,6 +259,7 @@ def login(creds: Credentials, request: Request, response: Response):
 def logout(request: Request, response: Response):
     sid, _ = current(request)
     sessions.drop(sid)
+    datacache.drop(sid)
     response.delete_cookie(COOKIE)
     response.delete_cookie(DEMO_COOKIE)
     return {"ok": True}
@@ -215,16 +283,66 @@ def session_info(request: Request):
     return {"name": s.name, "email": s.email}
 
 
+SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
+            "eol", "assessments", "tasks", "unread", "notifications",
+            "attendance", "announcements", "calendar", "resources",
+            "resourcesStale", "downloaded")
+
+
+SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
+            "eol", "assessments", "tasks", "unread", "notifications",
+            "attendance", "announcements", "calendar", "resources",
+            "resourcesStale", "downloaded")
+
+CACHE_HEADERS = {"Cache-Control": "private, max-age=60, must-revalidate"}
+
+
+def _want_sections(sections: str | None) -> set[str] | None:
+    if not sections:
+        return None
+    return {"live"} | {p.strip() for p in sections.split(",") if p.strip() in SECTIONS}
+
+
+def _slice(payload: dict, want: set[str] | None) -> dict:
+    if not want:
+        return payload
+    return {k: v for k, v in payload.items() if k in want}
+
+
+def _conditional(request: Request, payload: dict, media_type: str) -> Response:
+    etag = datacache.etag_for(payload)
+    headers = {"ETag": etag, **CACHE_HEADERS}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    if media_type == "text/javascript":
+        body = "window.LMS = " + json.dumps(payload, default=str) + ";"
+    else:
+        body = json.dumps(payload, default=str)
+    return Response(body, media_type=media_type, headers=headers)
+
+
 @app.get("/data.js")
-def data_js(request: Request, refresh: bool = False):
-    headers = {"Cache-Control": "no-store"}
+def data_js(request: Request, refresh: bool = False, sections: str | None = None):
     _, s = current(request)
     if not s:
+        headers = {"Cache-Control": "no-store"}
         script = ("window.OPENLMS_DEMO = true;" if request.cookies.get(DEMO_COOKIE)
                   else "location.replace('login.html');")
         return Response(script, media_type="text/javascript", headers=headers)
-    return Response("window.LMS = " + json.dumps(live_data(s, refresh), default=str) + ";",
-                    media_type="text/javascript", headers=headers)
+    want = _want_sections(sections)
+    only = (want - {"live"}) if (refresh and want) else None
+    return _conditional(request, _slice(live_data(s, refresh, only), want), "text/javascript")
+
+
+@app.get("/api/data")
+def api_data(request: Request, refresh: bool = False, sections: str | None = None):
+    """JSON sibling of /data.js for in-place refreshes: the Library
+    hot-swaps `?refresh=1&sections=resources,resourcesStale` without
+    reloading the page."""
+    s = require(request)
+    want = _want_sections(sections)
+    only = (want - {"live"}) if (refresh and want) else None
+    return _conditional(request, _slice(live_data(s, refresh, only), want), "application/json")
 
 
 @app.get("/api/files/{resource_id}/{file_id}")
