@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - CSRF guard now honours `OPENLMS_PUBLIC_HOST` (comma-separated): POSTs whose Origin matches a configured public hostname are allowed even when the Host header seen by the app differs (Cloudflare/ngrok Host rewrite). Evil origins are still blocked.
+- Resource crawl no longer 500s `/data.js` when the LMS answers a folder listing (or token refresh / login) with an empty/non-JSON body: bad pages degrade to partial/empty resources with stale fallback instead of crashing the page.
 - Indus LMS deep links: EOL/FA/SA buttons now open the subject hub (`/assignments?courseId=&classId=`) instead of `/assignments/test/<kind>?subject=&course_id=`. The test pages ignore course params in the URL and filter by the localStorage-selected course, so the old links showed 0 tests whenever storage held another subject. The hub reads the course from the URL and is one click from the test lists.
 - Learning-task links use `?courseId=` (camelCase), which `/studentassignment` actually reads.
 - Notification links resolve to the subject hub when the course is known (by id or link slug) instead of opening raw `/assignments/test/<slug>/<kind>` links.

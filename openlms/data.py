@@ -40,18 +40,31 @@ def strip_html(s: str | None) -> str:
 
 
 def _resource_page(tok: str, tid: str, parent: str | None, page: int) -> dict:
-    return lms.list_resources(tok, tid, None, parent, page, 100)
+    """One resource listing. Never raises: the LMS sometimes answers with
+    an empty/non-JSON body (stale token, gateway blip); callers treat that
+    as an empty page so one bad folder can't 500 the whole page."""
+    try:
+        data = lms.list_resources(tok, tid, None, parent, page, 100)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _walk(tok: str, tid: str, folder_id: str, depth: int, ex: ThreadPoolExecutor) -> list[dict]:
-    """Fetch one folder's children (single page loop), recursing via shared pool."""
+    """Fetch one folder's children (single page loop), recursing via shared pool.
+
+    Returns whatever was collected before a failure; never raises.
+    """
     items, page = [], 1
     while True:
         data = _resource_page(tok, tid, folder_id, page)
         batch = data.get("results") or []
         sub = [r for r in batch if r.get("is_folder") and depth < 6]
         if sub:
-            children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), sub))
+            try:
+                children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), sub))
+            except Exception:
+                children = [[] for _ in sub]
             for r, c in zip(sub, children):
                 r["children"] = c
         items += batch
@@ -72,7 +85,10 @@ def resource_tree(tok: str, tid: str, parent: str | None = None, depth: int = 0)
             batch = [r for r in batch if not r.get("parent_resource_id")] or batch
         folders = [r for r in batch if r.get("is_folder") and depth < 6]
         if folders:
-            children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), folders))
+            try:
+                children = list(ex.map(lambda f: _walk(tok, tid, f["id"], depth + 1, ex), folders))
+            except Exception:
+                children = [[] for _ in folders]
             for r, c in zip(folders, children):
                 r["children"] = c
         items += batch

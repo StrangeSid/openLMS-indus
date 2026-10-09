@@ -84,11 +84,15 @@ def get_payload(entry: _Entry, refresh: bool = False) -> dict | None:
     return entry.payload
 
 
-def get_files(entry: _Entry) -> list[dict] | None:
-    """Fresh cached files list, or None when missing/stale."""
+def get_files(entry: _Entry, allow_stale: bool = False) -> list[dict] | None:
+    """Fresh cached files list, or None when missing/stale.
+
+    `allow_stale=True` returns the last known list past its TTL — used as
+    a fallback when a fresh crawl fails, so the page still renders.
+    """
     if not entry.files:
         return None
-    if time.time() - entry.files_at > FILES_TTL:
+    if not allow_stale and time.time() - entry.files_at > FILES_TTL:
         return None
     return entry.files
 

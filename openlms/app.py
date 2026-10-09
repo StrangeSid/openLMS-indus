@@ -68,9 +68,13 @@ def fresh(s: Session) -> str:
             return s.access
         r = requests.post(f"{lms.API_BASE}/api/token/refresh/", json={"refresh": s.refresh},
                           headers=lms.HEADERS_BASE, timeout=15)
-        if not r.ok or "access" not in r.json():
+        try:
+            body = r.json()
+            refreshed = r.ok and "access" in body
+        except Exception:
+            refreshed = False  # empty/non-JSON body: treat like a failed refresh
+        if not refreshed:
             raise HTTPException(401, "Session expired. Sign in again.")
-        body = r.json()
         s.access, s.refresh = body["access"], body.get("refresh", s.refresh)
         try:
             sessions.save(s)
@@ -95,8 +99,18 @@ def live_data(s: Session, refresh: bool = False) -> dict:
         files = None if refresh else datacache.get_files(entry)
         token, tenant = fresh(s), s.tenant
         if files is None:
-            files = flatten(resource_tree(token, tenant))
-            datacache.put_files(entry, files)
+            try:
+                files = flatten(resource_tree(token, tenant))
+            except Exception:
+                # A failing crawl must not 500 the page: reuse stale files
+                # when available, else render without resources. Only a
+                # successful crawl refreshes the files timestamp, so the
+                # next rebuild retries.
+                files = datacache.get_files(entry, allow_stale=True)
+                if files is None:
+                    files = []
+            else:
+                datacache.put_files(entry, files)
         payload = build(token, tenant, files=files, live=True)
         datacache.put_payload(entry, payload)
         return payload
@@ -175,7 +189,10 @@ def login(creds: Credentials, request: Request, response: Response):
                           json={"email": creds.email.strip(), "password": creds.password})
     except requests.RequestException:
         raise HTTPException(502, "Couldn't reach Indus LMS. Try again shortly.")
-    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    try:
+        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(502, "Indus LMS gave an unreadable reply. Try again shortly.")
     if not r.ok or "access" not in body:
         raise HTTPException(401, "Email or password is incorrect.")
 
