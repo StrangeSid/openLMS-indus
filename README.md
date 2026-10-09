@@ -36,7 +36,7 @@ openLMS signs in to Indus LMS as you and reads your data live. Anything that cha
 - **Library.** Every shared file in one place, filterable by subject and type. You can optionally download them so they open offline.
 - **Progress.** Graded results, completion per subject, and one feed of notifications and announcements.
 - **Live, per-student sessions.** Each student signs in with their own account. Tokens refresh automatically, sessions survive server restarts, and files stream straight from the LMS.
-- **Fast repeat loads.** The server caches each student's data with mixed TTLs (longer for slow resources), serves `ETag`/`304`s, and the browser keeps a stale fallback cleared on logout.
+- **Fast repeat loads.** The server caches each student's data with mixed TTLs (longer for slow resources), serves `ETag`/`304`s, and the browser keeps a stale fallback cleared on logout. Stale resources stay visible under an "Updating resources…" banner while fresh files load.
 - **Demo mode.** *Explore with demo data* on the sign-in page shows the full app with made-up data, which is handy for presentations.
 - **No build step.** The front end is plain HTML, CSS and JavaScript, and works on desktop and phones.
 

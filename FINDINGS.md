@@ -127,7 +127,7 @@ Resolved in v0.2.0 (October 2026):
 - [x] TODO includes Learning Tasks: yes, alongside EOL, FA and SA. Resources stay in the Library and class pages.
 - [x] Grade-group display: dropped. Classes are listed by subject in the sidebar.
 - [x] Token refresh: server-side, per-student persistent sessions (`openlms/sessions.py`, SQLite + opaque cookie), refreshed shortly before expiry.
-- [x] Navigation speed: per-student server data cache with mixed TTLs (`openlms/cache.py`), `ETag`/`304` + `?sections=` on `/data.js`, and a browser `localStorage` stale fallback (`web/assets/cache.js`, cleared on logout).
+- [x] Navigation speed: per-student server data cache with mixed TTLs (`openlms/cache.py`), `ETag`/`304` + `?sections=` on `/data.js`, and a browser `localStorage` stale fallback (`web/assets/cache.js`, cleared on logout). Stale crawls flag `resourcesStale` and pages banner + retry instead of failing.
 - [x] Scope: openLMS reads live data; submissions, tests, messaging and mark-read link out to the matching Indus LMS page.
 
 ---

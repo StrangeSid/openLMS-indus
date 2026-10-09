@@ -97,6 +97,7 @@ def live_data(s: Session, refresh: bool = False) -> dict:
         if hit is not None:
             return hit
         files = None if refresh else datacache.get_files(entry)
+        files_stale = False
         token, tenant = fresh(s), s.tenant
         if files is None:
             try:
@@ -105,13 +106,16 @@ def live_data(s: Session, refresh: bool = False) -> dict:
                 # A failing crawl must not 500 the page: reuse stale files
                 # when available, else render without resources. Only a
                 # successful crawl refreshes the files timestamp, so the
-                # next rebuild retries.
+                # next rebuild retries. Either way the payload is flagged
+                # so the UI can banner + retry.
                 files = datacache.get_files(entry, allow_stale=True)
                 if files is None:
                     files = []
+                files_stale = True
             else:
                 datacache.put_files(entry, files)
         payload = build(token, tenant, files=files, live=True)
+        payload["resourcesStale"] = files_stale
         datacache.put_payload(entry, payload)
         return payload
 
@@ -242,7 +246,8 @@ def session_info(request: Request):
 
 SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
             "eol", "assessments", "tasks", "unread", "notifications",
-            "attendance", "announcements", "calendar", "resources", "downloaded")
+            "attendance", "announcements", "calendar", "resources",
+            "resourcesStale", "downloaded")
 
 
 @app.get("/data.js")

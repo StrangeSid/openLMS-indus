@@ -4,6 +4,42 @@ const TODAY = new Date();
 // Persist for offline/stale fallback (server stays source of truth).
 try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
 
+// Stale-resources banner: the server sets D.resourcesStale when the file
+// crawl failed and the page rendered reused/empty resources. Keep the stale
+// files visible, show a thin banner, and retry once in the background, then
+// reload to pick up fresh files. Manual retry afterwards, so a long LMS
+// outage can't trap the page in a reload loop.
+(function () {
+  if (!D || !D.resourcesStale || !D.live) return;
+  var KEY = 'openlms.res-retry';
+  var bar = document.createElement('div');
+  bar.setAttribute('role', 'status');
+  bar.style.cssText = 'position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;font-size:12px;font-weight:700;background:var(--accent-soft,#FDF1DC);color:#9A6514;border-bottom:1px solid var(--line,#e5e7eb)';
+  var retried = false;
+  try { retried = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
+  function wireRetry() {
+    var b = document.getElementById('resretry');
+    if (b) b.onclick = function () {
+      try { sessionStorage.removeItem(KEY); } catch (x) {}
+      location.reload();
+    };
+  }
+  document.body.insertAdjacentElement('afterbegin', bar);
+  if (!retried) {
+    bar.textContent = 'Updating resources…';
+    try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+    fetch('data.js?refresh=1', { cache: 'no-store' }).then(function () {
+      location.reload();
+    }).catch(function () {
+      bar.innerHTML = 'Couldn’t update resources. <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
+      wireRetry();
+    });
+  } else {
+    bar.innerHTML = 'Resources may be outdated. <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
+    wireRetry();
+  }
+})();
+
 const SUBJECTS = [
   { key: 'math', match: /math/i, short: 'Maths', c1: '#5B4FCF', c2: '#ECEAFB', glyph: 'Σ' },
   { key: 'phys', match: /physics/i, short: 'Physics', c1: '#2276B8', c2: '#E3EFF8', glyph: 'atom' },

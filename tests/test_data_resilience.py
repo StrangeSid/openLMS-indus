@@ -99,6 +99,7 @@ class DataJsResilienceTest(unittest.TestCase):
             server, "build",
             side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok},
         ).start()
+        self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
         self.post = mock.patch.object(server.requests, "post").start()
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(server.sessions.close)
@@ -108,12 +109,27 @@ class DataJsResilienceTest(unittest.TestCase):
             "access": _jwt(time.time() + 3600), "refresh": "r", "user": USER})
         return self.client.post("/api/login", json={"email": "s@school.test", "password": "pw"})
 
+    def payload_of(self, response):
+        body = response.text[len("window.LMS = "):].rstrip().rstrip(";")
+        return json.loads(body)
+
     def test_crawl_blowup_still_200(self):
         self.sign_in()
         with mock.patch.object(server, "resource_tree", side_effect=Exception("LMS hiccup")):
             r = self.client.get("/data.js")
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.text.startswith("window.LMS = "))
+
+    def test_fresh_crawl_marks_resources_current(self):
+        self.sign_in()
+        data = self.payload_of(self.client.get("/data.js"))
+        self.assertIs(data["resourcesStale"], False)
+
+    def test_failed_crawl_marks_resources_stale(self):
+        self.sign_in()
+        with mock.patch.object(server, "resource_tree", side_effect=Exception("LMS hiccup")):
+            data = self.payload_of(self.client.get("/data.js"))
+        self.assertIs(data["resourcesStale"], True)
 
 
 if __name__ == "__main__":
