@@ -67,7 +67,7 @@ function reindex() {
   R = D.resources.map((r, i) => ({ ...r, i, kind: fileKind(r.name), s: subj(r.subject) }));
   subjects = [...new Map(R.map(r => [r.s.key, r.s])).values()];
   types = [...new Set(R.map(r => r.kind.label))];
-  document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? ' · saved to Downloads/induslms' : ''}`;
+  document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? '' : ''}`;
   const qb = document.getElementById('q');
   if (qb) qb.placeholder = `Search ${R.length} files by name, teacher, folder…`;
 }
