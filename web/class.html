@@ -64,7 +64,19 @@ mountChrome(null, K, `Search in ${S.short}…`);
 
 const anns = D.announcements.filter(a => subj(a.subject).key === K);
 const work = assignments().filter(a => subj(a.subject).key === K);
-const files = D.resources.filter(r => subj(r.subject).key === K);
+let files = D.resources.filter(r => subj(r.subject).key === K);
+// Hot-swap for the stale-resources banner (see library.html).
+window.__lmsRefreshResources = async () => {
+  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
+  if (!r.ok) return false;
+  const data = await r.json();
+  D.resources = data.resources || [];
+  D.resourcesStale = !!data.resourcesStale;
+  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  files = D.resources.filter(x => subj(x.subject).key === K);
+  render();
+  return !D.resourcesStale;
+};
 let tab = params.get('tab') || 'stream', seg = 'upcoming', q = '';
 const count = st => work.filter(a => a.state === st).length;
 

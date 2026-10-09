@@ -6,38 +6,49 @@ try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
 
 // Stale-resources banner: the server sets D.resourcesStale when the file
 // crawl failed and the page rendered reused/empty resources. Keep the stale
-// files visible, show a thin banner, and retry once in the background, then
-// reload to pick up fresh files. Manual retry afterwards, so a long LMS
-// outage can't trap the page in a reload loop.
+// files visible under a thin banner. Pages showing files (Library, class)
+// expose window.__lmsRefreshResources to hot-swap fresh files in place;
+// other pages fall back to one background refresh + reload, then manual
+// retry, so a long LMS outage can't trap the page in a reload loop.
+// Runs on DOMContentLoaded so page hooks (defined after this file) exist.
 (function () {
-  if (!D || !D.resourcesStale || !D.live) return;
-  var KEY = 'openlms.res-retry';
-  var bar = document.createElement('div');
-  bar.setAttribute('role', 'status');
-  bar.style.cssText = 'position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;font-size:12px;font-weight:700;background:var(--accent-soft,#FDF1DC);color:#9A6514;border-bottom:1px solid var(--line,#e5e7eb)';
-  var retried = false;
-  try { retried = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
-  function wireRetry() {
-    var b = document.getElementById('resretry');
-    if (b) b.onclick = function () {
-      try { sessionStorage.removeItem(KEY); } catch (x) {}
-      location.reload();
-    };
+  function run() {
+    if (!D || !D.resourcesStale || !D.live) return;
+    var KEY = 'openlms.res-retry';
+    var bar = document.createElement('div');
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;font-size:12px;font-weight:700;background:var(--accent-soft,#FDF1DC);color:#9A6514;border-bottom:1px solid var(--line,#e5e7eb)';
+    document.body.insertAdjacentElement('afterbegin', bar);
+    function showRetry(msg) {
+      bar.innerHTML = msg + ' <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
+      var b = document.getElementById('resretry');
+      if (b) b.onclick = function () {
+        try { sessionStorage.removeItem(KEY); } catch (x) {}
+        location.reload();
+      };
+    }
+    if (typeof window.__lmsRefreshResources === 'function') {
+      bar.textContent = 'Updating resources…';
+      window.__lmsRefreshResources().then(function (ok) {
+        if (ok) {
+          bar.textContent = 'Resources updated.';
+          setTimeout(function () { bar.remove(); }, 2500);
+        } else showRetry('Resources may be outdated.');
+      }).catch(function () { showRetry('Couldn’t update resources.'); });
+      return;
+    }
+    var retried = false;
+    try { retried = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
+    if (!retried) {
+      bar.textContent = 'Updating resources…';
+      try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+      fetch('data.js?refresh=1', { cache: 'no-store' }).then(function () {
+        location.reload();
+      }).catch(function () { showRetry('Couldn’t update resources.'); });
+    } else showRetry('Resources may be outdated.');
   }
-  document.body.insertAdjacentElement('afterbegin', bar);
-  if (!retried) {
-    bar.textContent = 'Updating resources…';
-    try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
-    fetch('data.js?refresh=1', { cache: 'no-store' }).then(function () {
-      location.reload();
-    }).catch(function () {
-      bar.innerHTML = 'Couldn’t update resources. <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
-      wireRetry();
-    });
-  } else {
-    bar.innerHTML = 'Resources may be outdated. <button id="resretry" style="font:inherit;text-decoration:underline;background:none;border:0;color:inherit;cursor:pointer">Retry</button>';
-    wireRetry();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
 })();
 
 const SUBJECTS = [

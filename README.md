@@ -118,7 +118,7 @@ web/*.html   sign-in, sessions, cached      api.induslms.com
    └── Submit / Take test / Messaging ──► Indus LMS web app (induslms.com)
 ```
 
-Every page loads `data.js`. The server answers it from the per-student cache when fresh (rebuilding only expired parts), and supports `?refresh=1` for a forced rebuild, `?sections=` slices, and `If-None-Match` → `304`. The browser also keeps a `localStorage` stale fallback (cleared on logout) used when `data.js` is unreachable. Without the server (the offline snapshot or the demo), `data.js` is a static file or falls back to the demo data. The pages work the same either way.
+Every page loads `data.js`. The server answers it from the per-student cache when fresh (rebuilding only expired parts), and supports `?refresh=1` for a forced rebuild, `?sections=` slices, and `If-None-Match` → `304`. The JSON sibling `GET /api/data` takes the same parameters; `?refresh=1&sections=resources,resourcesStale` rebuilds only the file crawl so the Library hot-swaps fresh files without reloading. The browser also keeps a `localStorage` stale fallback (cleared on logout) used when `data.js` is unreachable. Without the server (the offline snapshot or the demo), `data.js` is a static file or falls back to the demo data. The pages work the same either way.
 
 Action buttons link to the matching Indus LMS page, using the same `?subject=…&course_id=…` links the LMS's own calendar uses, so students finish the task there.
 
@@ -151,7 +151,7 @@ web/
     app.css           Design tokens and layout
     data.example.js   Synthetic demo data
 tools/export.py       Offline snapshot to web/data.js
-tests/                Unit tests (app, sessions, cache, exporter)
+tests/                Unit tests (app, sessions, cache, partial refresh, exporter)
 docs/                 README screenshot
 FINDINGS.md           Audit of the current LMS: routes, API calls, click depth
 ```

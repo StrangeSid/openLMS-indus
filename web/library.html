@@ -58,11 +58,30 @@
 <script src="assets/app.js"></script>
 <script>
 mountChrome('files', null, `Search ${D.resources.length} files by name, teacher, folder…`);
-const R = D.resources.map((r, i) => ({ ...r, i, kind: fileKind(r.name), s: subj(r.subject) }));
+let R, subjects, types;
+function reindex() {
+  R = D.resources.map((r, i) => ({ ...r, i, kind: fileKind(r.name), s: subj(r.subject) }));
+  subjects = [...new Map(R.map(r => [r.s.key, r.s])).values()];
+  types = [...new Set(R.map(r => r.kind.label))];
+  document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? ' · saved to Downloads/induslms' : ''}`;
+  const qb = document.getElementById('q');
+  if (qb) qb.placeholder = `Search ${R.length} files by name, teacher, folder…`;
+}
 let fSubj = 'all', fType = 'all', view = 'grid', q = '';
-const subjects = [...new Map(R.map(r => [r.s.key, r.s])).values()];
-const types = [...new Set(R.map(r => r.kind.label))];
-document.getElementById('sub').textContent = `${R.length} files shared by your teachers across ${subjects.length} subjects${D.downloaded ? ' · saved to Downloads/induslms' : ''}`;
+reindex();
+// Hot-swap for the stale-resources banner: refresh just the files slice
+// and re-render in place. Resolves true when resources are current.
+window.__lmsRefreshResources = async () => {
+  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
+  if (!r.ok) return false;
+  const data = await r.json();
+  D.resources = data.resources || [];
+  D.resourcesStale = !!data.resourcesStale;
+  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  reindex();
+  render();
+  return !D.resourcesStale;
+};
 function chips() {
   document.getElementById('chips').innerHTML = `<button class="chip ${fSubj === 'all' ? 'on' : ''}" data-s="all" style="${fSubj === 'all' ? 'color:var(--brand)' : ''}">All subjects</button>` +
     subjects.map(s => `<button class="chip ${fSubj === s.key ? 'on' : ''}" data-s="${s.key}" style="${fSubj === s.key ? 'color:' + s.c1 : ''}"><i style="background:${s.c1}"></i>${esc(s.short)} <span class="muted">${R.filter(r => r.s.key === s.key).length}</span></button>`).join('');

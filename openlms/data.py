@@ -97,6 +97,17 @@ def resource_tree(tok: str, tid: str, parent: str | None = None, depth: int = 0)
         page += 1
 
 
+def shape_resources(files: list[dict], live: bool = False) -> list[dict]:
+    """Shape raw file rows into the UI `resources` list.
+
+    In live mode every file gets a `path` served by the backend's file proxy.
+    """
+    if live:
+        for f in files:
+            f["path"] = f"api/files/{f['id']}/{f['file_id']}"
+    return [{k: v for k, v in f.items() if k not in ("id", "file_id", "dir")} for f in files]
+
+
 def flatten(items: list[dict], folders: tuple[str, ...] = ()) -> list[dict]:
     out = []
     for r in items:
@@ -169,9 +180,7 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
     courses_raw, notes, att = r["courses"] or {}, r["notes"] or {}, r["att"] or {}
     courses = [c for c in courses_raw.get("courses", []) if c.get("title") != "Assembly"]
     grade = next((cl.get("grade") for c in courses for cl in c.get("classes") or [] if cl.get("grade")), "")
-    if live:
-        for f in files:
-            f["path"] = f"api/files/{f['id']}/{f['file_id']}"
+    resources = shape_resources(files, live)
 
     return {
         "live": live,
@@ -222,6 +231,6 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
         "calendar": sorted(({
             "date": e["date"], "end": e.get("end_date"), "type": e.get("type"), "label": e.get("comment"),
         } for e in (r["calendar"] or {}).get("events", [])), key=lambda e: e["date"]),
-        "resources": [{k: v for k, v in f.items() if k not in ("id", "file_id", "dir")} for f in files],
+        "resources": resources,
         "downloaded": live or any("path" in f for f in files),
     }

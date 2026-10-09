@@ -26,7 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from openlms.data import build, flatten, resource_tree
+from openlms.data import build, flatten, resource_tree, shape_resources
 from openlms.sessions import Session, Store
 from openlms import cache as datacache
 
@@ -83,16 +83,24 @@ def fresh(s: Session) -> str:
         return s.access
 
 
-def live_data(s: Session, refresh: bool = False) -> dict:
+PARTIAL_SECTIONS = {"resources", "resourcesStale"}
+
+
+def live_data(s: Session, refresh: bool = False, only: set[str] | None = None) -> dict:
     """Shared cached payload keyed by session id (singleflight).
 
     Mixed TTLs: the slow resource crawl is reused from cache while the
     rest rebuilds. Concurrent tabs wait on one per-sid lock.
+    With `refresh` and `only` limited to the resources slice, only the
+    file crawl rebuilds and the cached payload is patched in place —
+    the cheap path behind the Library hot-swap.
     """
     entry = datacache.get_entry(s.sid)
     if entry is None:  # no sid (tests): direct build, no caching
         return build(fresh(s), s.tenant, live=True)
     with entry.lock:
+        if refresh and only and only <= PARTIAL_SECTIONS:
+            return _refresh_files_only(entry, s)
         hit = datacache.get_payload(entry, refresh=refresh)
         if hit is not None:
             return hit
@@ -118,6 +126,30 @@ def live_data(s: Session, refresh: bool = False) -> dict:
         payload["resourcesStale"] = files_stale
         datacache.put_payload(entry, payload)
         return payload
+
+
+def _refresh_files_only(entry, s: Session) -> dict:
+    """Rebuild just the resources slice; patch it into the cached payload."""
+    token, tenant = fresh(s), s.tenant
+    try:
+        files = flatten(resource_tree(token, tenant))
+    except Exception:
+        files = datacache.get_files(entry, allow_stale=True)
+        if files is None:
+            files = []
+        stale = True
+    else:
+        datacache.put_files(entry, files)
+        stale = False
+    base = datacache.get_payload(entry)
+    if base is None:  # cold cache: fall back to a full build
+        payload = build(token, tenant, files=files, live=True)
+    else:
+        payload = dict(base)
+        payload["resources"] = shape_resources(files, live=True)
+    payload["resourcesStale"] = stale
+    datacache.put_payload(entry, payload)
+    return payload
 
 
 def warm(s: Session) -> None:
@@ -250,6 +282,38 @@ SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
             "resourcesStale", "downloaded")
 
 
+SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
+            "eol", "assessments", "tasks", "unread", "notifications",
+            "attendance", "announcements", "calendar", "resources",
+            "resourcesStale", "downloaded")
+
+CACHE_HEADERS = {"Cache-Control": "private, max-age=60, must-revalidate"}
+
+
+def _want_sections(sections: str | None) -> set[str] | None:
+    if not sections:
+        return None
+    return {"live"} | {p.strip() for p in sections.split(",") if p.strip() in SECTIONS}
+
+
+def _slice(payload: dict, want: set[str] | None) -> dict:
+    if not want:
+        return payload
+    return {k: v for k, v in payload.items() if k in want}
+
+
+def _conditional(request: Request, payload: dict, media_type: str) -> Response:
+    etag = datacache.etag_for(payload)
+    headers = {"ETag": etag, **CACHE_HEADERS}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    if media_type == "text/javascript":
+        body = "window.LMS = " + json.dumps(payload, default=str) + ";"
+    else:
+        body = json.dumps(payload, default=str)
+    return Response(body, media_type=media_type, headers=headers)
+
+
 @app.get("/data.js")
 def data_js(request: Request, refresh: bool = False, sections: str | None = None):
     _, s = current(request)
@@ -258,18 +322,20 @@ def data_js(request: Request, refresh: bool = False, sections: str | None = None
         script = ("window.OPENLMS_DEMO = true;" if request.cookies.get(DEMO_COOKIE)
                   else "location.replace('login.html');")
         return Response(script, media_type="text/javascript", headers=headers)
-    payload = live_data(s, refresh)
-    if sections:
-        want = {"live"} | {p.strip() for p in sections.split(",") if p.strip() in SECTIONS}
-        payload = {k: v for k, v in payload.items() if k in want}
-    etag = datacache.etag_for(payload)
-    if request.headers.get("if-none-match") == etag:
-        return Response(status_code=304, headers={"ETag": etag,
-                         "Cache-Control": "private, max-age=60, must-revalidate"})
-    body = "window.LMS = " + json.dumps(payload, default=str) + ";"
-    return Response(body, media_type="text/javascript",
-                    headers={"Cache-Control": "private, max-age=60, must-revalidate",
-                             "ETag": etag})
+    want = _want_sections(sections)
+    only = (want - {"live"}) if (refresh and want) else None
+    return _conditional(request, _slice(live_data(s, refresh, only), want), "text/javascript")
+
+
+@app.get("/api/data")
+def api_data(request: Request, refresh: bool = False, sections: str | None = None):
+    """JSON sibling of /data.js for in-place refreshes: the Library
+    hot-swaps `?refresh=1&sections=resources,resourcesStale` without
+    reloading the page."""
+    s = require(request)
+    want = _want_sections(sections)
+    only = (want - {"live"}) if (refresh and want) else None
+    return _conditional(request, _slice(live_data(s, refresh, only), want), "application/json")
 
 
 @app.get("/api/files/{resource_id}/{file_id}")
