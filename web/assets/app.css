@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Manrope loads via <link> in each page head (faster than @import). */
 
 :root {
   --brand: #0F766E;

@@ -240,6 +240,7 @@ async function signOut() {
   location.replace('login.html');
 }
 function mountChrome(active, activeClass, placeholder) {
+  const boot = document.getElementById('boot'); if (boot) boot.remove();
   const fav = document.createElement('link'); fav.rel = 'icon'; fav.href = 'data:image/svg+xml,' + encodeURIComponent(LOGO.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
   document.head.appendChild(fav);
   document.body.insertAdjacentHTML('afterbegin', sidebar(active, activeClass));
