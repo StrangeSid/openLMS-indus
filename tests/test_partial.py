@@ -80,7 +80,8 @@ class PartialRefreshTest(unittest.TestCase):
                 "live": live, "tok": tok, "resources": [{"title": "Old"}]},
         ).start()
         self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
-        self.post = mock.patch.object(server.requests, "post").start()
+        self.post = mock.patch.object(server.http, "post").start()
+        mock.patch.object(server, "_spawn", lambda fn: fn()).start()  # background crawl runs inline
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(server.sessions.close)
 

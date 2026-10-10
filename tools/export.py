@@ -3,7 +3,13 @@
 """Export your Indus LMS data to web/data.js for offline use (no server needed).
 
 Requires induslms-agent (`pip install induslms-agent`) and a token from
-`induslms login you@school.example`.
+`induslms login you@school.example`. An expired access token is refreshed
+and saved back automatically.
+
+Exports every assignment type (EOL with attempt flags, FA/SA across all
+pages, learning tasks), full announcements from `/announcements/visible/`
+(sanitized HTML + attachment links), notifications, messages, attendance,
+calendar and resources.
 
     python3 tools/export.py                # write web/data.js
     python3 tools/export.py --files        # also download shared files to web/files/
@@ -30,7 +36,7 @@ from openlms.data import build, clean_name, flatten, resource_tree  # noqa: E402
 
 
 def session() -> tuple[str, str]:
-    token = lms.load_token()
+    token = lms.ensure_fresh_token()
     if not token or not token.get("access"):
         sys.exit("No LMS token. Run: induslms login you@school.example")
     roles = (token.get("user") or {}).get("roles") or []
@@ -69,7 +75,8 @@ def main() -> None:
     data = build(tok, tid, files)
     Path(args.out).write_text("window.LMS = " + json.dumps(data, default=str) + ";\n")
     print(f"wrote {args.out}: {len(data['courses'])} classes, "
-          f"{len(data['eol']) + len(data['assessments'])} assignments, {len(files)} files")
+          f"{len(data['eol']) + len(data['assessments']) + len(data['tasks'])} assignments "
+          f"({len(data['tasks'])} learning tasks), {len(data['announcements'])} announcements, {len(files)} files")
 
 
 if __name__ == "__main__":

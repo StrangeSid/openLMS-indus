@@ -100,7 +100,8 @@ class DataJsResilienceTest(unittest.TestCase):
             side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok},
         ).start()
         self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
-        self.post = mock.patch.object(server.requests, "post").start()
+        self.post = mock.patch.object(server.http, "post").start()
+        mock.patch.object(server, "_spawn", lambda fn: fn()).start()  # background crawl runs inline
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(server.sessions.close)
 
@@ -110,7 +111,7 @@ class DataJsResilienceTest(unittest.TestCase):
         return self.client.post("/api/login", json={"email": "s@school.test", "password": "pw"})
 
     def payload_of(self, response):
-        body = response.text[len("window.LMS = "):].rstrip().rstrip(";")
+        body = response.text[len("window.LMS = "):].split(";window.LMS_ETAG")[0]
         return json.loads(body)
 
     def test_crawl_blowup_still_200(self):

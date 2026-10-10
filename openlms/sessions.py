@@ -72,6 +72,7 @@ class Session:
         self.access, self.refresh, self.tenant = access, refresh, tenant
         self.name = user.get("full_name") or user.get("email")
         self.email = user.get("email")
+        self.uid = user.get("id")
         self.seen = time.time()
         self.created = self.seen
         self.sid: str | None = None
@@ -97,6 +98,9 @@ class Store:
                 tenant TEXT NOT NULL, name TEXT, email TEXT,
                 seen REAL NOT NULL, created REAL NOT NULL)"""
         )
+        cols = {row[1] for row in self._db.execute("PRAGMA table_info(sessions)")}
+        if "uid" not in cols:  # pre-0.3 stores: the LMS user id is needed for EOL results
+            self._db.execute("ALTER TABLE sessions ADD COLUMN uid TEXT")
         self._db.commit()
         self.purge()
         if not self._memory:
@@ -133,10 +137,10 @@ class Store:
             s.created = s.seen
         with self._lock:
             self._db.execute(
-                "INSERT INTO sessions (sid, access, refresh, tenant, name, email, seen, created)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (sid, access, refresh, tenant, name, email, seen, created, uid)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (sid, self._enc(s.access), self._enc(s.refresh), s.tenant,
-                 s.name, s.email, s.seen, s.created),
+                 s.name, s.email, s.seen, s.created, s.uid),
             )
             self._db.commit()
         return sid
@@ -146,12 +150,12 @@ class Store:
             return None
         with self._lock:
             row = self._db.execute(
-                "SELECT sid, access, refresh, tenant, name, email, seen, created"
+                "SELECT sid, access, refresh, tenant, name, email, seen, created, uid"
                 " FROM sessions WHERE sid = ?", (sid,),
             ).fetchone()
             if not row:
                 return None
-            _, enc_access, enc_refresh, tenant, name, email, seen, created = row
+            _, enc_access, enc_refresh, tenant, name, email, seen, created, uid = row
             if time.time() - (seen or 0) > self.idle:
                 self._db.execute("DELETE FROM sessions WHERE sid = ?", (sid,))
                 self._db.commit()
@@ -162,7 +166,7 @@ class Store:
             # Secret rotated or row tampered: force re-login.
             self.drop(sid)
             return None
-        s = Session(access, refresh, tenant, {"full_name": name, "email": email})
+        s = Session(access, refresh, tenant, {"full_name": name, "email": email, "id": uid})
         s.sid = sid
         s.seen = time.time()
         s.created = created or s.seen
@@ -178,9 +182,9 @@ class Store:
         with self._lock:
             self._db.execute(
                 "UPDATE sessions SET access = ?, refresh = ?, tenant = ?,"
-                " name = ?, email = ?, seen = ? WHERE sid = ?",
+                " name = ?, email = ?, seen = ?, uid = ? WHERE sid = ?",
                 (self._enc(s.access), self._enc(s.refresh), s.tenant,
-                 s.name, s.email, s.seen, s.sid),
+                 s.name, s.email, s.seen, s.uid, s.sid),
             )
             self._db.commit()
 

@@ -48,8 +48,14 @@ PUBLIC_HOSTS = {"lms.sidevv.xyz"} | {
 }
 
 
+# Refresh the access token this many seconds before it expires, so a page
+# load never pays a 401 -> refresh -> retry round trip.
+REFRESH_MARGIN = 300
+
 sessions = Store(idle=SESSION_IDLE)
 attempts: dict[str, list[float]] = {}
+# Pooled keep-alive connections to the LMS (shared with induslms-agent).
+http = lms.HTTP
 app = FastAPI(title="openLMS", docs_url=None, redoc_url=None, openapi_url=None)
 
 
@@ -61,13 +67,16 @@ def jwt_exp(token: str) -> float:
         return 0.0
 
 
-def fresh(s: Session) -> str:
-    """Return a valid access token, refreshing it shortly before expiry."""
+def fresh(s: Session, force: bool = False) -> str:
+    """Return a valid access token, refreshing it ahead of expiry (or when `force`d after a 401)."""
     with s.lock:
-        if jwt_exp(s.access) - time.time() > 60:
+        if not force and jwt_exp(s.access) - time.time() > REFRESH_MARGIN:
             return s.access
-        r = requests.post(f"{lms.API_BASE}/api/token/refresh/", json={"refresh": s.refresh},
+        try:
+            r = http.post(f"{lms.API_BASE}/api/token/refresh/", json={"refresh": s.refresh},
                           headers=lms.HEADERS_BASE, timeout=15)
+        except requests.RequestException:
+            raise HTTPException(502, "Couldn't reach Indus LMS. Try again shortly.")
         try:
             body = r.json()
             refreshed = r.ok and "access" in body
@@ -83,73 +92,92 @@ def fresh(s: Session) -> str:
         return s.access
 
 
-PARTIAL_SECTIONS = {"resources", "resourcesStale"}
+PARTIAL_SECTIONS = {"resources", "resourcesStale", "resourcesPending"}
+CRAWL_WAIT = 45  # seconds a files-only request waits for the background crawl
 
 
-def live_data(s: Session, refresh: bool = False, only: set[str] | None = None) -> dict:
+def _spawn(fn) -> None:
+    threading.Thread(target=fn, daemon=True).start()
+
+
+def live_data(s: Session, refresh: bool = False, only: set[str] | None = None,
+              wait_files: bool = False) -> dict:
     """Shared cached payload keyed by session id (singleflight).
 
-    Mixed TTLs: the slow resource crawl is reused from cache while the
-    rest rebuilds. Concurrent tabs wait on one per-sid lock.
-    With `refresh` and `only` limited to the resources slice, only the
-    file crawl rebuilds and the cached payload is patched in place —
-    the cheap path behind the Library hot-swap.
+    The slow resource crawl (~11 s cold, 33 requests) never blocks a page:
+    the payload is built from the last known files (or none, flagged
+    `resourcesPending`) while the crawl runs in the background and patches
+    the cached payload when it finishes. Pages that show files ask for
+    `?sections=resources,...&wait=1` to pick the fresh list up in place.
     """
     entry = datacache.get_entry(s.sid)
     if entry is None:  # no sid (tests): direct build, no caching
         return build(fresh(s), s.tenant, live=True)
+    if only and only <= PARTIAL_SECTIONS and (refresh or wait_files):
+        return _files_only(entry, s, force=refresh)
     with entry.lock:
-        if refresh and only and only <= PARTIAL_SECTIONS:
-            return _refresh_files_only(entry, s)
-        hit = datacache.get_payload(entry, refresh=refresh)
-        if hit is not None:
-            return hit
-        files = None if refresh else datacache.get_files(entry)
-        files_stale = False
-        token, tenant = fresh(s), s.tenant
-        if files is None:
-            try:
-                files = flatten(resource_tree(token, tenant))
-            except Exception:
-                # A failing crawl must not 500 the page: reuse stale files
-                # when available, else render without resources. Only a
-                # successful crawl refreshes the files timestamp, so the
-                # next rebuild retries. Either way the payload is flagged
-                # so the UI can banner + retry.
-                files = datacache.get_files(entry, allow_stale=True)
-                if files is None:
-                    files = []
-                files_stale = True
-            else:
-                datacache.put_files(entry, files)
-        payload = build(token, tenant, files=files, live=True)
-        payload["resourcesStale"] = files_stale
-        datacache.put_payload(entry, payload)
-        return payload
+        payload = datacache.get_payload(entry, refresh=refresh)
+        if payload is None:
+            fresh_files = None if refresh else datacache.get_files(entry)
+            files = fresh_files if fresh_files is not None else datacache.get_files(entry, allow_stale=True)
+            token, tenant = fresh(s), s.tenant
+            payload = build(token, tenant, files=list(files or []), live=True)
+            payload["resourcesStale"] = files is not None and fresh_files is None
+            payload["resourcesPending"] = fresh_files is None
+            datacache.put_payload(entry, payload)
+    if payload.get("resourcesPending"):
+        _start_crawl(entry, s)
+    return entry.payload or payload
 
 
-def _refresh_files_only(entry, s: Session) -> dict:
-    """Rebuild just the resources slice; patch it into the cached payload."""
-    token, tenant = fresh(s), s.tenant
-    try:
-        files = flatten(resource_tree(token, tenant))
-    except Exception:
-        files = datacache.get_files(entry, allow_stale=True)
-        if files is None:
-            files = []
-        stale = True
-    else:
-        datacache.put_files(entry, files)
-        stale = False
-    base = datacache.get_payload(entry)
-    if base is None:  # cold cache: fall back to a full build
-        payload = build(token, tenant, files=files, live=True)
-    else:
-        payload = dict(base)
-        payload["resources"] = shape_resources(files, live=True)
-    payload["resourcesStale"] = stale
-    datacache.put_payload(entry, payload)
-    return payload
+def _start_crawl(entry, s: Session) -> None:
+    """Crawl resources in the background (one crawl per student at a time)."""
+    with entry.crawl_lock:
+        if entry.crawling:
+            return
+        entry.crawling = True
+        entry.crawl_done.clear()
+    sid = s.sid
+
+    def run() -> None:
+        files = None
+        try:
+            sess = sessions.get(sid) or s
+            files = flatten(resource_tree(fresh(sess), sess.tenant))
+        except Exception:
+            files = None  # keep whatever we had; the payload is flagged stale
+        try:
+            with entry.lock:
+                if files is not None:
+                    datacache.put_files(entry, files)
+                base = entry.payload
+                if base is not None:
+                    current = files if files is not None else datacache.get_files(entry, allow_stale=True) or []
+                    patched = dict(base)
+                    patched["resources"] = shape_resources(current, live=True)
+                    patched["resourcesStale"] = files is None
+                    patched["resourcesPending"] = False
+                    datacache.put_payload(entry, patched, keep_age=True)
+        finally:
+            with entry.crawl_lock:
+                entry.crawling = False
+            entry.crawl_done.set()
+
+    _spawn(run)
+
+
+def _files_only(entry, s: Session, force: bool) -> dict:
+    """Resources slice for in-place hot-swaps: start a crawl when asked (or
+    when none has finished yet) and wait for it, never rebuilding the rest."""
+    with entry.lock:
+        has_files = datacache.get_files(entry) is not None
+        cold = entry.payload is None
+    if cold:
+        live_data(s)
+    if force or not has_files or entry.crawling:
+        _start_crawl(entry, s)
+        entry.crawl_done.wait(CRAWL_WAIT)
+    return entry.payload or live_data(s)
 
 
 def warm(s: Session) -> None:
@@ -223,8 +251,8 @@ def login(creds: Credentials, request: Request, response: Response):
     attempts[ip] = window + [time.time()]
 
     try:
-        r = requests.post(f"{lms.API_BASE}/api/v1/auth/login/", headers=lms.HEADERS_BASE, timeout=15,
-                          json={"email": creds.email.strip(), "password": creds.password})
+        r = http.post(f"{lms.API_BASE}/api/v1/auth/login/", headers=lms.HEADERS_BASE, timeout=15,
+                      json={"email": creds.email.strip(), "password": creds.password})
     except requests.RequestException:
         raise HTTPException(502, "Couldn't reach Indus LMS. Try again shortly.")
     try:
@@ -284,15 +312,9 @@ def session_info(request: Request):
 
 
 SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
-            "eol", "assessments", "tasks", "unread", "notifications",
+            "eol", "assessments", "tasks", "threads", "unread", "notifications",
             "attendance", "announcements", "calendar", "resources",
-            "resourcesStale", "downloaded")
-
-
-SECTIONS = ("live", "student", "programCode", "program", "year", "courses",
-            "eol", "assessments", "tasks", "unread", "notifications",
-            "attendance", "announcements", "calendar", "resources",
-            "resourcesStale", "downloaded")
+            "resourcesStale", "resourcesPending", "downloaded")
 
 CACHE_HEADERS = {"Cache-Control": "private, max-age=60, must-revalidate"}
 
@@ -315,7 +337,8 @@ def _conditional(request: Request, payload: dict, media_type: str) -> Response:
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     if media_type == "text/javascript":
-        body = "window.LMS = " + json.dumps(payload, default=str) + ";"
+        # LMS_ETAG lets the page revalidate its saved copy later (If-None-Match).
+        body = "window.LMS = " + json.dumps(payload, default=str) + ";window.LMS_ETAG = " + json.dumps(etag) + ";"
     else:
         body = json.dumps(payload, default=str)
     return Response(body, media_type=media_type, headers=headers)
@@ -335,14 +358,15 @@ def data_js(request: Request, refresh: bool = False, sections: str | None = None
 
 
 @app.get("/api/data")
-def api_data(request: Request, refresh: bool = False, sections: str | None = None):
-    """JSON sibling of /data.js for in-place refreshes: the Library
-    hot-swaps `?refresh=1&sections=resources,resourcesStale` without
-    reloading the page."""
+def api_data(request: Request, refresh: bool = False, sections: str | None = None, wait: bool = False):
+    """JSON sibling of /data.js for in-place refreshes and background
+    revalidation. `?sections=resources,resourcesStale,resourcesPending&wait=1`
+    waits for the background crawl; with `refresh=1` it forces a new one.
+    Neither rebuilds the rest of the payload."""
     s = require(request)
     want = _want_sections(sections)
-    only = (want - {"live"}) if (refresh and want) else None
-    return _conditional(request, _slice(live_data(s, refresh, only), want), "application/json")
+    only = (want - {"live"}) if ((refresh or wait) and want) else None
+    return _conditional(request, _slice(live_data(s, refresh, only, wait_files=wait), want), "application/json")
 
 
 @app.get("/api/files/{resource_id}/{file_id}")
@@ -352,7 +376,7 @@ def file_proxy(resource_id: str, file_id: str, request: Request):
         raise HTTPException(404)
     url = (f"{lms.API_BASE}/api/v1/tenants/{s.tenant}/resources/{resource_id}"
            f"/files/{file_id}/content/?disposition=inline")
-    r = requests.get(url, headers=lms.get_auth_headers(fresh(s)), stream=True, timeout=60)
+    r = http.get(url, headers=lms.get_auth_headers(fresh(s)), stream=True, timeout=60)
     if not r.ok:
         message = ("Your teacher has restricted this file, so it can only be opened on Indus LMS."
                    if r.status_code == 403 else "Indus LMS couldn't send this file right now.")
@@ -373,4 +397,7 @@ def unavailable(message: str, status: int) -> HTMLResponse:
     return HTMLResponse(page, status_code=status)
 
 
+from openlms.routes import router  # noqa: E402  (routes import this module)
+
+app.include_router(router)
 app.mount("/", StaticFiles(directory=WEB, html=True), name="web")

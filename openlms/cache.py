@@ -39,8 +39,12 @@ FILES_TTL = int(os.environ.get("OPENLMS_FILES_TTL", "3600"))
 CACHE_SIZE = int(os.environ.get("OPENLMS_CACHE_SIZE", "200"))
 
 
+DETAIL_TTL = int(os.environ.get("OPENLMS_DETAIL_TTL", "300"))
+
+
 class _Entry:
-    __slots__ = ("payload", "built_at", "etag", "files", "files_at", "lock")
+    __slots__ = ("payload", "built_at", "etag", "files", "files_at", "lock",
+                 "crawl_lock", "crawling", "crawl_done", "memo", "memo_lock")
 
     def __init__(self) -> None:
         self.payload: dict | None = None
@@ -49,6 +53,14 @@ class _Entry:
         self.files: list[dict] | None = None
         self.files_at: float = 0.0
         self.lock = threading.Lock()
+        # Background resource crawl (singleflight): data.js never waits on it.
+        self.crawl_lock = threading.Lock()
+        self.crawling = False
+        self.crawl_done = threading.Event()
+        self.crawl_done.set()
+        # Detail views (/api/fa/..., /api/messages/...): key -> (stored_at, value)
+        self.memo: dict[str, tuple[float, object]] = {}
+        self.memo_lock = threading.Lock()
 
 
 _entries: OrderedDict[str, _Entry] = OrderedDict()
@@ -97,12 +109,42 @@ def get_files(entry: _Entry, allow_stale: bool = False) -> list[dict] | None:
     return entry.files
 
 
-def put_payload(entry: _Entry, payload: dict) -> str:
-    """Store payload, compute ETag, return it."""
+def put_payload(entry: _Entry, payload: dict, keep_age: bool = False) -> str:
+    """Store payload, compute ETag, return it. `keep_age` patches a slice
+    (e.g. resources) without extending the rest of the payload's TTL."""
     entry.payload = payload
-    entry.built_at = time.time()
+    if not keep_age:
+        entry.built_at = time.time()
     entry.etag = etag_for(payload)
     return entry.etag
+
+
+def memo(entry: _Entry, key: str, fn, ttl: float | None = None, refresh: bool = False):
+    """Per-student cached detail call (5 minutes by default). Errors are not cached."""
+    ttl = DETAIL_TTL if ttl is None else ttl
+    with entry.memo_lock:
+        hit = entry.memo.get(key)
+    if hit and not refresh and time.time() - hit[0] < ttl:
+        return hit[1]
+    value = fn()
+    with entry.memo_lock:
+        entry.memo[key] = (time.time(), value)
+    return value
+
+
+def forget(entry: _Entry | None, *prefixes: str) -> None:
+    """Drop cached detail entries whose key starts with any prefix (after a write)."""
+    if entry is None:
+        return
+    with entry.memo_lock:
+        for key in [k for k in entry.memo if k.startswith(prefixes)]:
+            del entry.memo[key]
+
+
+def expire_payload(entry: _Entry | None) -> None:
+    """Force the next data.js to rebuild (after a write that changes lists)."""
+    if entry is not None:
+        entry.built_at = 0.0
 
 
 def put_files(entry: _Entry, files: list[dict]) -> None:
