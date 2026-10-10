@@ -249,10 +249,10 @@ functions belong in `lms.py` + CLI + MCP alongside the reads.
 
 - [x] TODO includes Learning Tasks (yes — 2 overdue CS tasks prove it).
 - [x] Grade-group display: dropped (v0.2.0).
-- [ ] Attempt/submit in-app: EOL first (§6 trace is the spec), then FA/task submits.
+- [x] Attempt/submit in-app: EOL (§6 + §10C proctoring), FA/SA hand-in/resubmit/requests, task hand-in (Oct 09, `openlms/routes.py`, `web/test.html`).
 - [x] Messaging send + thread-detail: verified live Oct 09 (test message `8a3f2ca9-…` to Madhukar A).
 - [ ] SA has 0 rows for this student — verify SA detail against a subject that has one, or treat as FA-identical per bundle.
-- [ ] Uncaptured live-fires still needed: unsubmitted-FA submit dialog, task-submit PUT dance.
+- [ ] Uncaptured live-fires still needed: unsubmitted-FA submit dialog, task-submit PUT dance. Implemented from the bundle (§10C); the first real use should be watched.
 
 ---
 *Live trace IDs (Oct 09): ECO082 open `6ee61693-1a73-4c2d-93bb-1935cfb7ab5c`,
@@ -320,3 +320,47 @@ views, task detail) → P1 EOL attempt → P2 FA/task submits + extension reques
 P3 pathway roadmap, support tickets. Uncaptured live-fires still needed:
 unsubmitted-FA submit dialog, task submit PUT dance, SA detail (0 rows for
 this student).
+
+## 10. Performance (measured Oct 09) + corrections
+
+Account: a second DP student (7 courses), from India, Oct 09 evening. Scripts
+kept out of the repo; numbers are medians unless noted.
+
+### A. Where the time goes
+
+| Measurement | Result |
+|---|---|
+| Network to `api.induslms.com` | DNS 14 ms, TCP connect 254 ms (≈1 RTT), TLS 536 ms |
+| One request, new connection each time (`requests.get`, what `lms.py` ≤0.3.1 did) | ~1,050 ms |
+| Same request on a pooled keep-alive session | ~280 ms (first one ~1,200 ms) |
+| Indus dashboard after the access token expired while the tab was closed | 6/6 calls `401` (~1.2 s), refresh 1.0 s, retry ~3.4 s: **5.7 s** vs **1.3 s** with a fresh token |
+| openLMS cold `data.js` (old path: resource crawl, then fan-out) | crawl 11.3 s / 33 requests (first top-level page alone 5.4 s) + fan-out 3.7 s = **15 s**; A/B 3 rounds: 17.5 s median (12.7–21.0) |
+| openLMS cold `data.js` (new path: pooled fan-out, crawl in background) | **3.3 s** median (3.2–4.5); live browser check 3.7 s |
+| openLMS repeat visit (saved copy + `If-None-Match`) | DOMContentLoaded **29 ms**; revalidation `304` in 3 ms |
+| Slowest single endpoints (server time) | `eol-tests/my/` 2–3.4 s, `students/me/attendance/` 2.4–2.7 s, `notifications/?limit=100` 3.7 s (vs ~1.3 s at 20) |
+| Indus bundle | `index-Cfwucqr4.js` 8.92 MB (2.95 MB gzipped), `cache-control: public, max-age=0` (revalidated every load), ~0.5 s download + ~0.2 s parse/eval on a fast Mac (expect several times that on school laptops/phones) |
+
+Variance is high: the same build took 2.6–11.7 s across runs minutes apart,
+consistent with server-side throttling after bursts.
+
+### B. What openLMS changed
+
+1. `lms.HTTP`: one pooled `requests.Session` (induslms-agent 0.4.0). Every upstream call reuses connections.
+2. `data.js` no longer waits for the resource crawl. The payload ships with the last known files (or none, `resourcesPending`), the crawl runs in a background thread (singleflight per student) and patches the cached payload; file pages ask `?wait=1`.
+3. Tokens are refreshed 5 minutes before expiry (was 60 s), on the pooled connection; reads retry once after a forced refresh on `401`, writes never retry.
+4. Browser: stale-while-revalidate. `cache.js` renders the last copy, `app.js` revalidates with the payload `ETag` (`window.LMS_ETAG` in `data.js`). No polling: a visible tab revalidates when it's been 5+ minutes; messages poll only while a conversation is open and visible (15 s, backing off to 2 min).
+5. Notifications in the payload capped at 30 (the centre pages the rest); Google Fonts no longer block first paint.
+6. Detail views cached per student for 5 minutes (`OPENLMS_DETAIL_TTL`); writes invalidate what they touch.
+
+### C. Corrections and new facts (probes + bundle, Oct 09)
+
+- EOL rows carry `id` == `test_id` (uuid) and `short_id`; the global `eol-tests/my/` list (19 rows) is a superset of the per-course lists (9 rows summed): tests from courses outside the student's course list only appear globally. Keep the global list.
+- FA/SA `submission/` and `feedback/` take `assessment.id`; the wrapper `assignment_id` 404s.
+- `requests/summary` items: `can_request.{extension,resubmission}` is `{ok, code, message}` (not a boolean) and `latest` is `{extension, resubmission}`, each null or a request.
+- Notification `ref_id` is the assessment id (titles keep the name at publish time; teachers rename assessments later). `meta` carries `subject`, `assessment_type`.
+- Learning tasks: the global `assignments/student/list/` already returns them (same 2 rows as per-course); rows include `attachments[{name, file_url}]`.
+- Proctoring: on `visibilitychange` → hidden during an attempt the web app sends `POST /tenants/{tid}/eol-tests/{uuid}/proctoring/ {event_type: "document_visibility_hidden"}` → `{proctor_violation_count, suspend_threshold, proctor_suspended}`; warning `n/(threshold-1)`, terminate at the threshold. Mid-test exits are counted only in localStorage (`eol_mid_test_exits:v1:{tid}:{uid}:{uuid}`, max 3), combined with the row's `mid_test_exit_count`. Copy/paste is blocked. Unanswered questions are sent as `"a"` by the web app; openLMS requires every answer instead.
+- Uploads: `POST /api/v1/s3uploads/get-upload-url/ {tenant_id, module, entity_id, filename, content_type}` → `{upload_url, file_url, upload_id, method}`; tasks use a fresh `entity_id` per hand-in and send `submission_files[{file_url, name, content_type, size_bytes}]` with `submission_text: ""` (the web app requires at least one file). FA/SA upload with module `assesement` and send `submission_urls` as plain `file_url` strings; MCQ answers send `selected_option`, others `answer_text`.
+- Policies: `GET /api/v1/tenants/{tid}/academic-years/{program_year_id}/policies/` for every programme year (DP, MYP, PYP all answer), deduped by title. Help: `GET /api/v1/tenants/{tid}/help/?audience=student`. EOL teacher feedback: `GET .../eol-tests/{uuid}/feedback/` → `{feedbacks}`.
+- Conversation messages: `{id, from_user_id, from_user_name, to_user_id, text, sent_at, read_at, status, status_label}`; contacts `{user_id, full_name, role, email, subjects, subject_label}`.
+
