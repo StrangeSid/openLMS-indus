@@ -4,11 +4,20 @@
 #     --repository-format=docker --location=asia-southeast1
 #   Connect this repo in Cloud Build > Triggers, trigger on push to ^main$,
 #   using this file as the build config.
-# Note: the service lives in asia-southeast1 (Singapore) because Cloud Run
-# domain mappings aren't supported in asia-south1 (Mumbai).
+# Note: the trigger itself may live in global, but the service and image
+# repo must stay regional — Cloud Run has no 'global' deploy region and
+# Artifact Registry has no 'global' docker repo. The service lives in
+# asia-southeast1 (Singapore) because Cloud Run domain mappings aren't
+# supported in asia-south1 (Mumbai).
 substitutions:
-  _AR_LOCATION: global
+  _AR_LOCATION: asia-southeast1
   _SERVICE: openlms
+
+# Required when the trigger runs under an explicit service account:
+# without this, global-region builds fail with "if 'build.service_account'
+# is specified, the build must either (a) specify 'build.logs_bucket'...".
+options:
+  default_logs_bucket_behavior: REGIONAL_USER_OWNED_BUCKET
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -32,7 +41,7 @@ steps:
       - '--image'
       - '$_AR_LOCATION-docker.pkg.dev/$PROJECT_ID/openlms/openlms:$COMMIT_SHA'
       - '--region'
-      - global
+      - asia-southeast1
       - '--platform'
       - managed
       - '--allow-unauthenticated'
