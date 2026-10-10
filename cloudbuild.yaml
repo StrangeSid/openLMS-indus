@@ -7,7 +7,7 @@
 # Note: the service lives in asia-southeast1 (Singapore) because Cloud Run
 # domain mappings aren't supported in asia-south1 (Mumbai).
 substitutions:
-  _AR_LOCATION: asia-southeast1
+  _AR_LOCATION: global
   _SERVICE: openlms
 
 steps:
@@ -32,7 +32,7 @@ steps:
       - '--image'
       - '$_AR_LOCATION-docker.pkg.dev/$PROJECT_ID/openlms/openlms:$COMMIT_SHA'
       - '--region'
-      - asia-southeast1
+      - global
       - '--platform'
       - managed
       - '--allow-unauthenticated'
@@ -41,7 +41,7 @@ steps:
       - '--min-instances'
       - '1'
       - '--memory'
-      - 512Mi
+      - 1000Mi
       - '--cpu'
       - '1'
       - '--set-env-vars'
