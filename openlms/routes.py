@@ -182,7 +182,9 @@ def _options(q: dict) -> list[dict]:
 
 
 def shape_question(q: dict) -> dict:
-    return {"id": q.get("id"), "html": sanitize_html(q.get("question_text")), "image": q.get("question_image_url"),
+    # Attempt questions carry `id`; stored result responses carry `question_id`.
+    # The result view's Explain button posts this id back, so map both.
+    return {"id": q.get("id") or q.get("question_id"), "html": sanitize_html(q.get("question_text")), "image": q.get("question_image_url"),
             "marks": q.get("marks"), "options": _options(q)}
 
 

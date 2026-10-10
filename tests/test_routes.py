@@ -188,6 +188,7 @@ class RoutesTest(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertEqual(body["result"]["percentage"], 80)
+        self.assertEqual(body["result"]["responses"][0]["id"], "q1")
         self.assertEqual(body["feedback"], [{"text": "Good"}])
         self.assertEqual(result.call_args.args[1:], ("tid", EOL_ID, UID))
 
