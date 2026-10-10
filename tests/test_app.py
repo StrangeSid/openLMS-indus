@@ -51,8 +51,9 @@ class AppTest(unittest.TestCase):
         self.client = TestClient(server.app, base_url="https://testserver")
         self.build = mock.patch.object(server, "build", side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok}).start()
         self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
-        self.post = mock.patch.object(server.requests, "post").start()
-        self.get = mock.patch.object(server.requests, "get").start()
+        self.post = mock.patch.object(server.http, "post").start()
+        mock.patch.object(server, "_spawn", lambda fn: fn()).start()  # background crawl runs inline
+        self.get = mock.patch.object(server.http, "get").start()
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(server.sessions.close)
 
@@ -111,6 +112,12 @@ class AppTest(unittest.TestCase):
     def test_cross_site_post_blocked(self):
         r = self.client.post("/api/logout", headers={"origin": "https://evil.example"})
         self.assertEqual(r.status_code, 403)
+
+    def test_favicon(self):
+        r = self.client.get("/favicon.ico", follow_redirects=False)
+        self.assertEqual(r.status_code, 301)
+        self.assertEqual(r.headers["location"], "/assets/favicon.svg")
+        self.assertEqual(self.client.get("/favicon.ico").headers["content-type"], "image/svg+xml")
 
     def test_public_host_allowlisted(self):
         # lms.sidevv.xyz is allowed by default: Cloudflare Origin Rule rewrites

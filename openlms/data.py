@@ -7,6 +7,8 @@ import html
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
+from html.parser import HTMLParser
 
 import lms
 
@@ -37,6 +39,125 @@ def clean_name(s: str | None) -> str:
 
 def strip_html(s: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
+
+
+# Teacher-written HTML (announcement bodies, instructions) is rendered on
+# our origin, so it passes through an allowlist: formatting tags only, no
+# styles, scripts, event handlers or non-http(s) links.
+_ALLOWED_TAGS = {
+    "p", "br", "b", "strong", "i", "em", "u", "s", "strike", "del", "ins", "mark", "small", "sub", "sup",
+    "ul", "ol", "li", "a", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "span", "div",
+    "table", "thead", "tbody", "tfoot", "tr", "td", "th", "code", "pre", "hr", "img", "figure", "figcaption",
+}
+_VOID_TAGS = {"br", "hr", "img"}
+_HTML_VOID = {"area", "base", "br", "col", "embed", "frame", "hr", "img", "input", "link", "meta",
+              "param", "source", "track", "wbr"}
+_DROP_WITH_CONTENT = {"script", "style", "iframe", "object", "embed", "noscript", "template", "svg",
+                      "math", "head", "title", "textarea", "select", "button", "form", "input", "frame", "frameset"}
+_ALLOWED_ATTRS = {"a": {"href", "title"}, "img": {"src", "alt", "title", "width", "height"},
+                  "td": {"colspan", "rowspan"}, "th": {"colspan", "rowspan"}, "ol": {"start"}}
+
+
+def _safe_url(url: str, images: bool = False) -> str | None:
+    url = (url or "").strip()
+    scheme = url.split(":", 1)[0].lower() if ":" in url else ""
+    allowed = ("https",) if images else ("http", "https", "mailto")
+    return url if scheme in allowed else None
+
+
+class _Sanitizer(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.out: list[str] = []
+        self.open: list[str] = []
+        self.skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _DROP_WITH_CONTENT:
+            self.skip += tag not in _HTML_VOID
+            return
+        if self.skip or tag not in _ALLOWED_TAGS:
+            return
+        kept = []
+        for name, value in attrs:
+            if name not in _ALLOWED_ATTRS.get(tag, ()) or value is None:
+                continue
+            if name in ("href", "src"):
+                value = _safe_url(value, images=name == "src")
+                if not value:
+                    continue
+            elif name in ("colspan", "rowspan", "start", "width", "height") and not value.isdigit():
+                continue
+            kept.append(f' {name}="{html.escape(value, quote=True)}"')
+        if tag == "a":
+            kept.append(' target="_blank" rel="noopener noreferrer"')
+        if tag == "img" and not any(k.startswith(" src=") for k in kept):
+            return
+        self.out.append(f"<{tag}{''.join(kept)}>")
+        if tag not in _VOID_TAGS:
+            self.open.append(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in _DROP_WITH_CONTENT:
+            return
+        self.handle_starttag(tag, attrs)
+        if tag not in _VOID_TAGS and self.open and self.open[-1] == tag:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        if tag in _DROP_WITH_CONTENT:
+            if tag not in _HTML_VOID:
+                self.skip = max(0, self.skip - 1)
+            return
+        if self.skip or tag not in self.open:
+            return
+        while self.open:
+            top = self.open.pop()
+            self.out.append(f"</{top}>")
+            if top == tag:
+                break
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.out.append(html.escape(data, quote=False))
+
+
+def sanitize_html(s: str | None) -> str:
+    """Allowlisted HTML for teacher-written bodies (safe to set as innerHTML)."""
+    if not s:
+        return ""
+    if "<" not in s:  # plain text: keep line breaks
+        return html.escape(s, quote=False).replace("\n", "<br>")
+    p = _Sanitizer()
+    p.feed(s)
+    p.close()
+    p.out += [f"</{t}>" for t in reversed(p.open)]
+    return "".join(p.out).strip()
+
+
+def academic_year(today: date | None = None) -> str:
+    """Indus academic year label ("2026-27"); the year rolls over in June."""
+    override = os.environ.get("OPENLMS_ACADEMIC_YEAR")
+    if override:
+        return override
+    today = today or date.today()
+    start = today.year if today.month >= 6 else today.year - 1
+    return f"{start}-{(start + 1) % 100:02d}"
+
+
+def file_links(items) -> list[dict]:
+    """LMS `file_urls` / attachments → [{name, url, type, size}] (direct S3 links)."""
+    out = []
+    for f in items or []:
+        if isinstance(f, str):
+            f = {"url": f}
+        url = f.get("url") or f.get("file_url") or f.get("download_url")
+        if not url:
+            continue
+        name = f.get("name") or f.get("filename") or url.split("?")[0].rsplit("/", 1)[-1]
+        out.append({"name": name, "url": url, "type": f.get("content_type") or f.get("type"),
+                    "size": f.get("size_bytes") or f.get("size")})
+    return out
 
 
 def _resource_page(tok: str, tid: str, parent: str | None, page: int) -> dict:
@@ -134,17 +255,6 @@ def results(data) -> list:
     return (data or {}).get("results") or [] if isinstance(data, dict) else []
 
 
-def assessments(tok: str, kind: str) -> list[dict]:
-    items = []
-    for page in range(1, 26):
-        data = lms.assessments(tok, {"assessment_type": kind, "page": page, "page_size": 100})
-        batch = results(data)
-        items += batch
-        if isinstance(data, list) or len(batch) < 100 or len(items) >= (data.get("count") or 0):
-            return items
-    return items
-
-
 def safe(fn, default):
     """Run one LMS call; a failing section shouldn't take the whole page down."""
     try:
@@ -155,21 +265,101 @@ def safe(fn, default):
     return default if failed else out
 
 
+NOTIFICATIONS_IN_PAYLOAD = 30  # the inbox shows ~25; the notification centre pages the rest
+
+
+def shape_eol(e: dict) -> dict:
+    return {
+        "id": e.get("id") or e.get("test_id"), "testId": e.get("short_id"),
+        "title": e.get("title"), "subject": e.get("subject"), "topic": e.get("topic"), "status": e.get("status"),
+        "score": e.get("score"), "total": e.get("total_marks"), "percentage": e.get("percentage"),
+        "teacher": e.get("teacher_name"), "assigned": e.get("assigned_at"), "due": e.get("available_until"),
+        "opens": e.get("available_from"), "submitted": e.get("submitted_at"),
+        "availability": e.get("availability_status"), "marking": e.get("marking_mode"),
+        "canAttempt": bool(e.get("can_attempt")), "expired": bool(e.get("is_expired")),
+        "blocked": bool(e.get("attempts_blocked") or e.get("attempts_exceeded")),
+        "suspended": bool(e.get("proctor_suspended")), "attemptStatus": e.get("attempt_status"),
+        "exits": e.get("mid_test_exit_count") or 0, "exitMax": e.get("mid_test_exit_max") or 3,
+        "expiresMessage": e.get("expires_message"), "opensMessage": e.get("opens_message"),
+        "feedbackSent": bool(e.get("feedback_sent")),
+    }
+
+
+def shape_assessment(a: dict, kind: str | None = None) -> dict:
+    x = a.get("assessment") or {}
+    return {
+        "id": x.get("id"), "title": x.get("title"), "subject": x.get("subject"),
+        "type": x.get("assessment_type") or kind, "category": x.get("category"),
+        "due": x.get("due_date"), "status": a.get("status"), "marks": a.get("marks"), "total": a.get("total_marks"),
+        "teacher": x.get("teacher_name"), "submitted": a.get("submitted_at"), "assigned": a.get("assigned_at"),
+        "courseId": x.get("course_id"), "questions": len(x.get("questions") or []),
+        "submissionOpen": x.get("submission_open"), "awaitingWork": a.get("awaiting_work"),
+    }
+
+
+def shape_task(t: dict) -> dict:
+    return {
+        "id": t.get("id"), "title": t.get("title") or "Assignment", "subject": t.get("subject") or t.get("course_title"),
+        "due": t.get("due_date"), "status": t.get("status"), "submitted": t.get("submitted_at"),
+        "assigned": t.get("created_at") or t.get("assigned_at"), "teacher": t.get("teacher_name"),
+        "score": t.get("score"), "grade": t.get("grade") or None, "attachments": len(t.get("attachments") or []),
+    }
+
+
+def shape_announcement(a: dict) -> dict:
+    creator = a.get("creator") or {}
+    body = sanitize_html(a.get("message"))
+    return {
+        "id": a.get("id"), "title": a.get("title"), "subject": a.get("subject"),
+        "by": creator.get("full_name"), "byEmail": creator.get("email"), "target": a.get("target_type"),
+        "grade": a.get("grade"), "at": a.get("created_at"),
+        "message": strip_html(body)[:280], "html": body,
+        "files": file_links(a.get("file_urls")),
+    }
+
+
+def shape_notification(n: dict) -> dict:
+    meta = n.get("meta") if isinstance(n.get("meta"), dict) else {}
+    return {
+        "id": n.get("id"), "title": n.get("title"), "message": n.get("message"), "type": n.get("type"),
+        "actor": n.get("actor_name"), "at": n.get("created_at"), "read": n.get("is_read"), "link": n.get("link"),
+        "courseId": n.get("course_id"), "classId": n.get("class_id"), "refId": n.get("ref_id"),
+        "subject": meta.get("subject"),
+    }
+
+
+def shape_thread(t: dict) -> dict:
+    return {
+        "userId": t.get("contact_user_id"), "name": t.get("contact_user_name"), "role": t.get("contact_user_role"),
+        "last": t.get("last_message"), "at": t.get("last_updated"), "status": t.get("status"),
+    }
+
+
+def _announcements(tok: str) -> list:
+    """Full announcements (`/visible/`), falling back to the older list endpoint."""
+    try:
+        return lms.announcements_visible(tok, academic_year())
+    except Exception:
+        return results(lms.announcements(tok))
+
+
 def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = False) -> dict:
     """Return the UI data object. Pass pre-fetched `files` to reuse a resource walk.
 
     In live mode every file gets a `path` served by the backend's file proxy.
+    Every call runs in parallel on one shared pool of keep-alive connections.
     """
     calls = {
         "courses": (lambda: lms.my_courses(tok, tid), {}),
         "me": (lambda: lms.me(tok), {}),
         "eol": (lambda: lms.eol_tests(tok, tid), {}),
-        "fa": (lambda: assessments(tok, "FA"), []),
-        "sa": (lambda: assessments(tok, "SA"), []),
-        "tasks": (lambda: lms.api_get_json(tok, f"/api/v1/tenants/{tid}/assignments/student/list/"), []),
-        "notes": (lambda: lms.notifications(tok, tid, 100), {}),
+        "fa": (lambda: lms.assessments_all(tok, "FA"), []),
+        "sa": (lambda: lms.assessments_all(tok, "SA"), []),
+        "tasks": (lambda: lms.learning_tasks(tok, tid), []),
+        "threads": (lambda: lms.message_threads(tok, tid), []),
+        "notes": (lambda: lms.notifications(tok, tid, NOTIFICATIONS_IN_PAYLOAD), {}),
         "att": (lambda: lms.attendance(tok), {}),
-        "announcements": (lambda: lms.announcements(tok), []),
+        "announcements": (lambda: _announcements(tok), []),
         "calendar": (lambda: lms.calendar_events(tok), {}),
     }
     if files is None:
@@ -194,40 +384,21 @@ def build(tok: str, tid: str, files: list[dict] | None = None, live: bool = Fals
             "title": c["title"], "level": c.get("subject_level"), "code": c.get("code"),
             "teacher": (c.get("teachers") or [{}])[0].get("full_name"),
         } for c in courses],
-        "eol": [{
-            "title": e["title"], "subject": e["subject"], "topic": e.get("topic"), "status": e["status"],
-            "score": e.get("score"), "total": e.get("total_marks"), "teacher": e.get("teacher_name"),
-            "assigned": e.get("assigned_at"), "due": e.get("available_until"), "opens": e.get("available_from"),
-            "submitted": e.get("submitted_at"), "availability": e.get("availability_status"),
-            "testId": e.get("short_id"),
-        } for e in results(r["eol"])],
-        "assessments": [{
-            "title": a["assessment"]["title"], "subject": a["assessment"]["subject"],
-            "type": a["assessment"].get("assessment_type") or kind, "category": a["assessment"].get("category"),
-            "due": a["assessment"].get("due_date"), "status": a.get("status"), "marks": a.get("marks"),
-            "total": a.get("total_marks"), "teacher": a["assessment"].get("teacher_name"),
-            "submitted": a.get("submitted_at"), "assigned": a.get("assigned_at"),
-        } for kind in ("FA", "SA") for a in r[kind.lower()] if isinstance(a.get("assessment"), dict)],
-        "tasks": [{
-            "title": t.get("title") or "Assignment", "subject": t.get("subject") or t.get("course_title"),
-            "due": t.get("due_date"), "status": t.get("status"), "submitted": t.get("submitted_at"),
-            "assigned": t.get("created_at") or t.get("assigned_at"), "teacher": t.get("teacher_name"),
-        } for t in results(r["tasks"])],
+        "eol": [shape_eol(e) for e in results(r["eol"]) if e.get("title")],
+        "assessments": [shape_assessment(a, kind) for kind in ("FA", "SA") for a in results(r[kind.lower()])
+                        if isinstance(a.get("assessment"), dict)],
+        "tasks": [shape_task(t) for t in results(r["tasks"])],
+        "threads": sorted((shape_thread(t) for t in results(r["threads"])),
+                          key=lambda t: t["at"] or "", reverse=True)[:20],
         "unread": notes.get("unread_count", 0),
-        "notifications": [{
-            "title": n["title"], "message": n.get("message"), "type": n.get("type"),
-            "actor": n.get("actor_name"), "at": n.get("created_at"), "read": n.get("is_read"), "link": n.get("link"),
-            "courseId": n.get("course_id"),
-        } for n in results(notes)[:25]],
+        "notifications": [shape_notification(n) for n in results(notes)[:NOTIFICATIONS_IN_PAYLOAD]],
         "attendance": {
             **{k: att.get(k) for k in ("total_sessions", "present", "absent", "late", "percentage")},
             "records": [{"date": r["date"], "status": r["status"], "subject": r.get("subject")}
                         for r in att.get("records", []) if not r.get("is_calendar_event")],
         },
-        "announcements": [{
-            "title": a["title"], "subject": a.get("subject"), "by": (a.get("creator") or {}).get("full_name"),
-            "at": a.get("created_at"), "message": strip_html(a.get("message"))[:280], "files": len(a.get("file_urls") or []),
-        } for a in results(r["announcements"])],
+        "announcements": sorted((shape_announcement(a) for a in results(r["announcements"])),
+                                key=lambda a: a["at"] or "", reverse=True),
         "calendar": sorted(({
             "date": e["date"], "end": e.get("end_date"), "type": e.get("type"), "label": e.get("comment"),
         } for e in (r["calendar"] or {}).get("events", [])), key=lambda e: e["date"]),

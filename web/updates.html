@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Updates · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<style>
+  main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 48px; max-width: 1080px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .head h1 { font-size: clamp(26px, 3vw, 34px); }
+  .head p { margin: 4px 0 0; color: var(--muted); font-weight: 600; }
+  .tabs { display: inline-flex; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; gap: 2px; }
+  .tabs button { border: 0; background: none; border-radius: 999px; padding: 8px 16px; font-weight: 700; color: var(--ink-2); display: inline-flex; gap: 8px; align-items: center; }
+  .tabs button span { font-size: 12px; color: var(--muted); }
+  .tabs button.on { background: var(--river); color: #fff; }
+  .tabs button.on span { color: var(--accent); }
+  .bar { display: flex; gap: 8px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 12px; font-weight: 700; font-size: 12.5px; color: var(--ink-2); }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .bar .grow { flex: 1; }
+  .note { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px 18px; border-bottom: 1px solid var(--line); position: relative; }
+  .note.unread { background: linear-gradient(90deg, rgba(210,82,75,.06), transparent 60%); }
+  .note.unread::before { content: ''; position: absolute; left: 7px; top: 26px; width: 6px; height: 6px; border-radius: 50%; background: var(--late); }
+  .note:target { box-shadow: inset 3px 0 0 var(--accent); }
+  .note .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+  .note a.main { display: block; min-width: 0; }
+  .note a.main:hover b { text-decoration: underline; text-underline-offset: 3px; }
+  .note b { font-size: 14px; display: block; }
+  .note p { margin: 2px 0 4px; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .note small { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+  .note .acts { display: flex; gap: 6px; align-items: center; }
+  .more { display: flex; justify-content: center; padding: 16px; }
+  .ann { border-bottom: 1px solid var(--line); }
+  .ann > button { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: start; width: 100%; padding: 14px 18px; text-align: left; border: 0; background: none; }
+  .ann > button:hover { background: #F6F9F8; }
+  .ann .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-ink); }
+  .ann b { font-size: 14px; display: block; }
+  .ann p { margin: 2px 0 4px; font-size: 13px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ann small { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+  .ann .chev { transition: transform .15s; color: var(--muted); margin-top: 8px; }
+  .ann.open .chev { transform: rotate(90deg); }
+  .ann.open > button p { display: none; }
+  .ann .full { padding: 0 18px 18px 66px; }
+  .ann .full[hidden] { display: none; }
+  .ann .from { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  @media (max-width: 640px) { .ann .full { padding-left: 18px; } .note { grid-template-columns: 36px minmax(0, 1fr); } .note .acts { grid-column: 2; } }
+</style></head>
+<body>
+<div class="with-side">
+  <main>
+    <div class="head"><div><h1>Updates</h1><p id="sub"></p></div><nav class="tabs" id="tabs" role="tablist"></nav></div>
+    <section class="card" id="box"></section>
+  </main>
+</div>
+<script src="assets/cache.js"></script>
+<script>__lmsBoot()</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script src="assets/app.js"></script>
+<script>
+page(() => {
+mountChrome('bell', null, 'Search updates…');
+const box = document.getElementById('box'), P = new URLSearchParams(location.search);
+let tab = P.get('tab') === 'ann' || location.hash.startsWith('#ann-') ? 'ann' : 'n';
+let filter = 'all', q = '', items = [], next = 0, unread = D.unread || 0, loading = false;
+if (!IN_APP) {
+  box.innerHTML = `<div class="empty-state"><b>Updates need the openLMS server</b>${extLink(lmsUrl('/notification'), 'Open notifications on Indus LMS', 'btn')}</div>`;
+  return;
+}
+const TYPE = t => /eol/.test(t) ? ['tasks', '#FBE6E6', '#B23434'] : /fa|sa|assess|test/.test(t) ? ['tasks', '#FCEFD8', '#94600F'] : /resource|file/.test(t) ? ['files', '#E5EDFB', '#2D58B3'] : /announce/.test(t) ? ['megaphone', '#E3F2EF', '#0B5A54'] : ['bell', '#EEF1F3', '#44535C'];
+function tabs() {
+  document.getElementById('tabs').innerHTML = [['n', 'Notifications', unread ? `${unread} new` : ''], ['ann', 'Announcements', D.announcements.length]].map(([k, l, n]) =>
+    `<button role="tab" data-tab="${k}" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}">${l}${n ? `<span>${n}</span>` : ''}</button>`).join('');
+  document.getElementById('sub').textContent = tab === 'n' ? 'Everything Indus LMS told you about, newest first.' : 'Posts from your teachers and the school.';
+}
+function syncBell() {
+  D.unread = unread;
+  D.notifications.forEach(n => { const x = items.find(i => i.id === n.id); if (x) n.read = x.read; });
+  refreshChrome();
+}
+
+/* ---------- Notifications ---------- */
+function noteRow(n) {
+  const [ic, bg, fg] = TYPE(n.type || '');
+  return `<div class="note ${n.read ? '' : 'unread'}" id="n-${esc(n.id)}"><span class="ic" style="background:${bg};color:${fg}">${icon(ic, 17)}</span>
+    <a class="main" href="${esc(notifLinkFor(n))}"><b>${esc(n.title)}</b>${n.message ? `<p>${esc(n.message)}</p>` : ''}<small>${esc(n.actor || '')}${n.at ? ` · ${ago(n.at)}` : ''}${n.subject ? ` · ${esc(n.subject)}` : ''}</small></a>
+    <div class="acts">${n.read ? '<span class="pill grey">Read</span>' : `<button class="btn ghost ext" data-dismiss="${esc(n.id)}">${icon('check', 13)} Dismiss</button>`}</div></div>`;
+}
+function drawNotes() {
+  box.innerHTML = `<div class="bar">${['all', 'unread', 'read'].map(f => `<button class="chip ${filter === f ? 'on' : ''}" data-f="${f}">${titleCase(f)}</button>`).join('')}
+      <span class="grow"></span>${unread ? `<button class="btn ghost ext" id="readall">${icon('check', 13)} Mark all read</button>` : ''}</div>
+    <div id="notes">${items.map(noteRow).join('') || (loading ? skeleton(5) : `<div class="empty-state"><b>${filter === 'unread' ? 'You’re all caught up' : 'Nothing here'}</b>${q ? 'Try a different search.' : ''}</div>`)}</div>
+    ${next !== null && items.length ? '<div class="more"><button class="btn ghost" id="more">Load more</button></div>' : ''}`;
+  if (location.hash.startsWith('#n-')) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView({ block: 'center' });
+}
+async function loadNotes(reset) {
+  if (reset) { items = []; next = 0; }
+  if (next === null) return;
+  loading = true; if (reset) drawNotes();
+  try {
+    // Filters apply per page; keep paging until something shows or the inbox ends.
+    let got = 0, pages = 0;
+    do {
+      const r = await api(`notifications?limit=20&offset=${next}&filter=${filter}&q=${encodeURIComponent(q)}`);
+      items.push(...r.items); got += r.items.length; next = r.nextOffset; unread = r.unread;
+    } while (got < 8 && next !== null && ++pages < 5);
+  } catch (e) { toast(e.message, 'err'); }
+  loading = false; tabs(); drawNotes(); syncBell();
+}
+
+/* ---------- Announcements ---------- */
+const readOnce = new Set((() => { try { return JSON.parse(sessionStorage.getItem('openlms.ann-read') || '[]'); } catch (e) { return []; } })());
+function annRow(a) {
+  const s = subj(a.subject);
+  return `<article class="ann" id="ann-${esc(a.id)}"><button aria-expanded="false" data-ann="${esc(a.id)}"><span class="ic" style="background:${s.c2};color:${s.c1}">${icon('megaphone', 17)}</span>
+      <div><b>${esc(a.title)}</b><p>${esc(a.message)}</p><small>${esc(a.by || '')}${a.subject ? ` · ${esc(titleCase(a.subject))}` : a.target === 'school' ? ' · Whole school' : ''} · ${fmtDate(a.at, { day: 'numeric', month: 'short', year: 'numeric' })}</small></div>
+      <span class="chev">${icon('chevron', 16)}</span></button>
+    <div class="full" hidden><div class="from">From ${esc(a.by || 'your teacher')}${a.byEmail ? ` &lt;${esc(a.byEmail)}&gt;` : ''} · ${fmtDateTime(a.at)}${a.grade ? ` · ${esc(a.grade)}` : ''}</div>
+      <div class="prose">${a.html || esc(a.message)}</div>${Array.isArray(a.files) ? fileChips(a.files) : ''}</div></article>`;
+}
+function drawAnns() {
+  const needle = q.toLowerCase();
+  const list = D.announcements.filter(a => !needle || `${a.title} ${a.message} ${a.by} ${a.subject}`.toLowerCase().includes(needle));
+  box.innerHTML = list.map(annRow).join('') || `<div class="empty-state"><b>No announcements</b>${q ? 'Try a different search.' : ''}</div>`;
+  const id = location.hash.startsWith('#ann-') && decodeURIComponent(location.hash.slice(5));
+  if (id) { const b = box.querySelector(`[data-ann="${CSS.escape(id)}"]`); if (b) { toggleAnn(b, true); b.scrollIntoView({ block: 'start' }); } }
+}
+function toggleAnn(btn, open) {
+  const art = btn.parentElement, full = art.querySelector('.full'), show = open ?? full.hidden;
+  full.hidden = !show; art.classList.toggle('open', show); btn.setAttribute('aria-expanded', String(show));
+  const id = btn.dataset.ann;
+  // Opening records the read on Indus LMS, as its own announcement page does.
+  if (show && id && !readOnce.has(id)) {
+    readOnce.add(id);
+    try { sessionStorage.setItem('openlms.ann-read', JSON.stringify([...readOnce])); } catch (e) {}
+    api(`announcements/${encodeURIComponent(id)}/read`, { method: 'POST' }).catch(() => readOnce.delete(id));
+  }
+}
+
+function draw() { tabs(); tab === 'n' ? (items.length ? drawNotes() : loadNotes(true)) : drawAnns(); }
+document.getElementById('tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; history.replaceState(null, '', tab === 'ann' ? 'updates.html?tab=ann' : 'updates.html'); draw(); };
+box.onclick = async e => {
+  const f = e.target.closest('[data-f]'), dis = e.target.closest('[data-dismiss]'), ann = e.target.closest('[data-ann]');
+  if (f) { filter = f.dataset.f; loadNotes(true); }
+  else if (e.target.closest('#more')) loadNotes(false);
+  else if (ann) toggleAnn(ann);
+  else if (dis) {
+    dis.disabled = true;
+    try {
+      await api(`notifications/${encodeURIComponent(dis.dataset.dismiss)}/read`, { method: 'POST' });
+      const n = items.find(x => x.id === dis.dataset.dismiss); if (n && !n.read) { n.read = true; unread = Math.max(0, unread - 1); }
+      if (filter === 'unread') items = items.filter(x => !x.read);
+      tabs(); drawNotes(); syncBell();
+    } catch (err) { dis.disabled = false; toast(err.message, 'err'); }
+  } else if (e.target.closest('#readall')) {
+    if (!await confirmDialog({ title: 'Mark everything as read?', confirm: 'Mark all read', html: `<p>${unread} notification${unread === 1 ? '' : 's'} will be marked read on Indus LMS too.</p>` })) return;
+    try {
+      await api('notifications/read-all', { method: 'POST' });
+      unread = 0; items.forEach(n => { n.read = true; }); if (filter === 'unread') items = [];
+      tabs(); drawNotes(); syncBell(); toast('All caught up.');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+};
+let searchTimer;
+document.getElementById('q').oninput = e => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { q = e.target.value.trim(); tab === 'n' ? loadNotes(true) : drawAnns(); }, 250); };
+draw();
+}, { detail: true });
+</script>
+</body></html>

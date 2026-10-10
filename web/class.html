@@ -6,18 +6,28 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
-  .content { padding: 24px 28px 40px; max-width: 1120px; }
-  .banner { height: 150px; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid var(--line); }
-  .banner .over { position: absolute; left: 24px; bottom: 18px; right: 160px; }
-  .banner h1 { font-size: 26px; font-weight: 800; }
-  .banner p { margin: 4px 0 0; font-weight: 700; color: var(--ink-2); }
-  .ctabs { display: flex; gap: 2px; margin: 18px 0; border-bottom: 1px solid var(--line); }
-  .ctabs button { border: 0; background: none; padding: 10px 14px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .ctabs button.on { color: var(--brand); border-color: var(--brand); }
-  .ctabs .n { font-size: 11px; background: var(--canvas); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; margin-left: 4px; color: var(--ink-2); }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+  .content { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 40px; }
+  .banner { position: relative; overflow: hidden; border-radius: 24px; padding: 28px 30px 24px; color: #fff; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; min-height: 176px;
+    background: radial-gradient(520px 220px at 90% 0%, color-mix(in srgb, var(--subj) 55%, transparent), transparent 70%), linear-gradient(135deg, var(--river) 0%, color-mix(in srgb, var(--subj) 45%, var(--river)) 100%);
+    box-shadow: 0 18px 40px -20px rgba(13,58,53,.6); }
+  .banner::after { content: ''; position: absolute; inset: auto 0 0 0; height: 100%; pointer-events: none; opacity: .35;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='176' viewBox='0 0 600 176'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.18' stroke-width='1.2'%3E%3Cpath d='M0 110c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3Cpath d='M0 136c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3Cpath d='M0 162c50-26 100 26 150 0s100 26 150 0 100 26 150 0 100 26 150 0'/%3E%3C/g%3E%3C/svg%3E") right bottom / 600px 176px repeat-x; }
+  .banner > * { position: relative; z-index: 1; }
+  .banner .who { display: flex; align-items: center; gap: 18px; min-width: 0; }
+  .banner .badge { width: 68px; height: 68px; border-radius: 20px; background: rgba(255,255,255,.95); display: grid; place-items: center; flex: none; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35); }
+  .banner .level { font-size: 12px; font-weight: 700; color: rgba(255,255,255,.75); }
+  .banner h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 700; color: #fff; letter-spacing: -0.02em; margin: 2px 0 4px; }
+  .banner p { margin: 0; font-weight: 600; color: rgba(255,255,255,.8); }
+  .banner .btn.ghost { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.3); backdrop-filter: blur(6px); }
+  .banner .btn.ghost:hover { background: rgba(255,255,255,.2); border-color: #fff; color: #fff; }
+  .ctabs { display: flex; gap: 4px; margin: 20px 0; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; width: fit-content; }
+  .ctabs button { border: 0; background: none; padding: 8px 16px; font-weight: 700; color: var(--ink-2); border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; }
+  .ctabs button.on { background: var(--river); color: #fff; }
+  .ctabs .n { font-family: var(--display); font-size: 13px; color: var(--muted); font-weight: 700; }
+  .ctabs button.on .n { color: var(--accent); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 24vw, 400px); gap: clamp(20px, 2vw, 32px); }
   .post { padding: 18px; margin-bottom: 14px; }
   .post header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .post header span { font-size: 12px; color: var(--muted); }
@@ -48,17 +58,18 @@
   .ftype { width: 38px; height: 44px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 800; display: grid; place-items: end center; padding-bottom: 6px; flex: none; }
   .file b { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .empty { padding: 40px; text-align: center; color: var(--muted); font-weight: 600; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .content { padding: 16px; } .banner .over { right: 24px; } }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .content { padding: 16px; } .banner { flex-direction: column; align-items: flex-start; padding: 22px; } .banner .badge { width: 54px; height: 54px; border-radius: 16px; } .ctabs { width: 100%; } .ctabs button { flex: 1; justify-content: center; padding: 8px 6px; gap: 5px; } }
 </style></head>
 <body>
 <div class="with-side">
   <section class="content" id="content"></section>
 </div>
 <script src="assets/cache.js"></script>
-<script src="data.js"></script>
+<script>__lmsBoot()</script>
 <script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
+page(() => {
 const params = new URLSearchParams(location.search);
 const course = D.courses.find(c => subj(c.title).key === params.get('c')) || D.courses[0];
 const S = subj(course.title), K = S.key;
@@ -68,17 +79,12 @@ mountChrome(null, K, `Search in ${S.short}…`);
 const anns = D.announcements.filter(a => subj(a.subject).key === K);
 const work = assignments().filter(a => subj(a.subject).key === K);
 let files = D.resources.filter(r => subj(r.subject).key === K);
-// Hot-swap for the stale-resources banner (see library.html).
+// Files load in the background on the server (see library.html).
 window.__lmsRefreshResources = async () => {
-  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
-  if (!r.ok) return false;
-  const data = await r.json();
-  D.resources = data.resources || [];
-  D.resourcesStale = !!data.resourcesStale;
-  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  if (!await fetchResources()) return false;
   files = D.resources.filter(x => subj(x.subject).key === K);
   render();
-  return !D.resourcesStale;
+  return !D.resourcesStale && !D.resourcesPending;
 };
 let tab = params.get('tab') || 'stream', seg = 'upcoming', q = '';
 const count = st => work.filter(a => a.state === st).length;
@@ -86,7 +92,7 @@ const count = st => work.filter(a => a.state === st).length;
 function stream() {
   return `<div class="grid"><div>${anns.map(a => `
     <article class="card post"><header><span class="avatar" style="background:${S.c1}">${initials(a.by)}</span><div><b>${esc(a.by)}</b><br><span>${fmtDate(a.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span></div></header>
-    <h3>${esc(a.title)}</h3><p>${esc(a.message)}</p>${a.files ? `<span class="attach">${icon('file', 14)} ${a.files} attachment${a.files > 1 ? 's' : ''}</span>` : ''}</article>`).join('') || '<div class="card empty">No posts in this class yet</div>'}</div>
+    <h3>${esc(a.title)}</h3>${a.html ? `<div class="prose">${a.html}</div>` : `<p>${esc(a.message)}</p>`}${Array.isArray(a.files) ? fileChips(a.files) : a.files ? `<span class="attach">${icon('file', 14)} ${a.files} attachment${a.files > 1 ? 's' : ''}</span>` : ''}</article>`).join('') || '<div class="card empty">No posts in this class yet</div>'}</div>
     <div class="card info" style="padding:16px;align-self:start"><div class="section-title">About this class</div>
       <dl><dt>Teacher</dt><dd>${esc(course.teacher || '—')}</dd><dt>Level</dt><dd>${esc(course.level || '—')}</dd><dt>Code</dt><dd>${esc(course.code || '—')}</dd></dl>
       <div class="mini"><div><b>${count('upcoming')}</b><span>Upcoming</span></div><div><b>${count('done')}</b><span>Done</span></div><div><b style="color:var(--late)">${count('late')}</b><span>Late</span></div></div></div></div>`;
@@ -95,7 +101,7 @@ function work_() {
   const list = work.filter(a => a.state === seg).sort((a, b) => new Date(a.due || a.assigned) - new Date(b.due || b.assigned));
   if (seg !== 'upcoming') list.reverse();
   return `<div class="seg">${['upcoming', 'done', 'late'].map(s => `<button data-seg="${s}" class="${seg === s ? 'on' : ''}">${s[0].toUpperCase() + s.slice(1)} · ${count(s)}</button>`).join('')}</div>
-    <div class="card">${list.map(a => `<div class="task"><div><b>${esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}${a.testId ? ' · Test ID ' + esc(a.testId) : ''}</small></div>${statusPill(a)}${actionFor(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
+    <div class="card">${list.map(a => `<div class="task"><div><b>${IN_APP && a.id ? `<a class="rowlink" href="${detailHref(a)}">${esc(a.title)}</a>` : esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}${a.testId ? ' · Test ID ' + esc(a.testId) : ''}</small></div>${statusPill(a)}${actionFor(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
 }
 function resources() {
   const folders = {};
@@ -107,7 +113,10 @@ function resources() {
 }
 function render() {
   document.getElementById('content').innerHTML = `
-    <div class="banner">${cover(course.title, 1000, 150)}<div class="over"><span class="pill" style="background:#fff;color:${S.c1}">${esc(D.programCode)}${course.level ? ' · ' + course.level : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div>${course.id ? `<div style="position:absolute;right:20px;top:18px">${extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS')}</div>` : ''}</div>
+    <div class="banner" style="--subj:${S.c1}">
+      <div class="who"><span class="badge"><svg width="40" height="40" viewBox="0 0 40 40">${glyphSvg(S.glyph, S.c1, 20, 20, 22)}</svg></span>
+        <div><span class="level">${esc(D.programCode)}${course.level ? ' ' + esc(course.level) : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div></div>
+      ${course.id && !IN_APP ? extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS') : ''}</div>
     <div class="ctabs">${[['stream', 'Stream', anns.length], ['work', 'Assignments', work.length], ['files', 'Resources', files.length]].map(([k, l, n]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}<span class="n">${n}</span></button>`).join('')}</div>
     ${tab === 'stream' ? stream() : tab === 'work' ? work_() : resources()}`;
 }
@@ -118,5 +127,6 @@ document.getElementById('content').onclick = e => {
   if (s) { seg = s.dataset.seg; render(); }
 };
 document.getElementById('q').oninput = e => { q = e.target.value.toLowerCase(); if (tab !== 'files') tab = 'files'; render(); };
+});
 </script>
 </body></html>

@@ -1,0 +1,488 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Assignment · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<style>
+  .content { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 48px; max-width: 1280px; }
+  .crumbs { display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 14px; }
+  .crumbs a:hover { color: var(--brand-ink); }
+  .hero { position: relative; overflow: hidden; border-radius: 22px; padding: 24px 26px; color: #fff; display: flex; gap: 18px; align-items: flex-end; justify-content: space-between; flex-wrap: wrap;
+    background: radial-gradient(520px 220px at 92% 0%, color-mix(in srgb, var(--subj) 55%, transparent), transparent 70%), linear-gradient(135deg, var(--river) 0%, color-mix(in srgb, var(--subj) 40%, var(--river)) 100%);
+    box-shadow: 0 18px 40px -20px rgba(13,58,53,.6); }
+  .hero .kicker { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.75); letter-spacing: .02em; }
+  .hero h1 { font-size: clamp(22px, 2.6vw, 30px); color: #fff; margin: 4px 0 6px; max-width: 46ch; }
+  .hero .meta { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.82); }
+  .hero .meta a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+  .hero .pill { background: rgba(255,255,255,.16); color: #fff; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 26vw, 380px); gap: clamp(18px, 2vw, 30px); margin-top: 22px; align-items: start; }
+  .stack { display: grid; gap: 18px; min-width: 0; }
+  .panel { padding: 20px; }
+  .panel h2 { font-size: 17px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  dl.facts { display: grid; grid-template-columns: 112px 1fr; gap: 9px 10px; margin: 0; font-size: 13px; }
+  dl.facts dt { color: var(--muted); font-weight: 700; }
+  dl.facts dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+  .callout { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: var(--canvas); color: var(--ink-2); font-weight: 600; font-size: 13.5px; }
+  .callout.warn { background: var(--accent-soft); color: #7A4E0B; }
+  .callout.bad { background: var(--late-soft); color: var(--late-ink); }
+  .callout.good { background: var(--done-soft); color: var(--done-ink); }
+  .callout svg { flex: none; margin-top: 1px; }
+  .rules { margin: 12px 0 16px; padding-left: 18px; color: var(--ink-2); font-size: 13.5px; display: grid; gap: 4px; }
+  .score { display: flex; align-items: center; gap: 18px; }
+  .score .big { font-family: var(--display); font-size: 40px; font-weight: 800; line-height: 1; }
+  .score .big small { font-size: 18px; color: var(--muted); }
+  .bar { height: 8px; border-radius: 99px; background: var(--canvas); overflow: hidden; flex: 1; }
+  .bar span { display: block; height: 100%; border-radius: 99px; }
+  .q { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--surface); }
+  .q + .q { margin-top: 12px; }
+  .q header { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; font-weight: 800; color: var(--muted); }
+  .q .qimg { max-width: 100%; border-radius: 10px; margin-top: 8px; }
+  .opts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+  .opt .k, .choice .k { flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 12px; background: var(--canvas); color: var(--ink-2); text-transform: uppercase; }
+  .opt .tag { margin-left: auto; flex: none; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
+  .opt.correct { border-color: var(--done); background: var(--done-soft); }
+  .opt.correct .k { background: var(--done); color: #fff; }
+  .opt.correct .tag { background: var(--done); color: #fff; }
+  .opt.wrong { border-color: var(--late); background: var(--late-soft); }
+  .opt.wrong .k { background: var(--late); color: #fff; }
+  .opt.wrong .tag { background: var(--late); color: #fff; }
+  .note { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--info-soft); color: #23427F; font-size: 13.5px; }
+  .note b { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 4px; }
+  .explain { margin-top: 10px; }
+  .fb { padding: 12px 14px; border-radius: 12px; background: var(--canvas); }
+  .fb + .fb { margin-top: 8px; }
+  .chosen { display: grid; gap: 6px; margin-top: 10px; }
+  .chosen div { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; }
+  .chosen button { margin-left: auto; border: 0; background: none; color: var(--muted); }
+  .rubric { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  .rubric td, .rubric th { padding: 7px 8px; border-top: 1px solid var(--line); text-align: left; }
+  .keep { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; margin-top: 6px; }
+  .req-latest { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--canvas); font-size: 13px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+  /* EOL attempt: full screen, one question at a time */
+  .attempt { position: fixed; inset: 0; z-index: 40; background: var(--canvas); display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
+  .attempt[hidden] { display: none; }
+  .attempt .top { display: flex; align-items: center; gap: 14px; padding: 14px clamp(16px, 3vw, 32px); background: var(--river); color: #fff; }
+  .attempt .top h2 { font-size: 17px; color: #fff; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .attempt .top small { font-weight: 700; color: #B9D6D1; white-space: nowrap; }
+  .attempt .top .x { border: 1px solid rgba(255,255,255,.3); background: transparent; color: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; }
+  .attempt .warnbar { padding: 10px 16px; background: var(--late); color: #fff; font-weight: 800; text-align: center; font-size: 13px; }
+  .attempt .warnbar[hidden] { display: none; }
+  .attempt .dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 14px 16px 0; }
+  .attempt .dots button { width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-weight: 800; color: var(--ink-2); }
+  .attempt .dots button.done { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+  .attempt .dots button.on { outline: 2px solid var(--river); outline-offset: 1px; }
+  .attempt .body { flex: 1; overflow: auto; padding: 18px clamp(16px, 3vw, 32px); }
+  .attempt .card { max-width: 760px; margin: 0 auto; padding: 22px; }
+  .attempt .count { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .attempt .qtext { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .choice { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 14px; cursor: pointer; font-size: 15px; background: #fff; }
+  .choice:hover { border-color: var(--brand); }
+  .choice input { position: absolute; opacity: 0; pointer-events: none; }
+  .choice:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
+  .choice:has(input:checked) .k { background: var(--brand); color: #fff; }
+  .choice:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .attempt .foot { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px clamp(16px, 3vw, 32px); background: #fff; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .attempt .foot .hint { flex: 1; text-align: center; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } .content { padding: 16px; } }
+</style></head>
+<body>
+<div class="with-side">
+  <main class="content" id="content"></main>
+</div>
+<div class="attempt" id="attempt" role="dialog" aria-modal="true" aria-labelledby="attempt-title" hidden></div>
+<script src="assets/cache.js"></script>
+<script>__lmsBoot()</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script src="assets/app.js"></script>
+<script>
+page(() => {
+const P = new URLSearchParams(location.search), KIND = (P.get('kind') || '').toLowerCase(), ID = P.get('id') || '';
+const A = assignments().find(a => a.id === ID) || null;
+const S = subj(A?.subject);
+const C = document.getElementById('content');
+const KIND_LABEL = { eol: 'Lesson check (EOL)', fa: 'Formative assessment', sa: 'Summative assessment', task: 'Learning task' };
+mountChrome(null, A ? S.key : null, 'Search assignments… (Enter)');
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) location.href = `index.html?q=${encodeURIComponent(e.target.value.trim())}`; });
+document.title = `${A?.title || KIND_LABEL[KIND] || 'Assignment'} · openLMS`;
+
+// `pill` reflects the detail response, which is fresher than the list right after a hand-in.
+function hero(pill) {
+  const course = A && courseFor(A.subject);
+  return `<nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Home</a>›${course ? `<a href="class.html?c=${S.key}&tab=work">${esc(S.short)}</a>›` : ''}<span>${esc(KIND_LABEL[KIND] || 'Assignment')}</span></nav>
+    <section class="hero" style="--subj:${S.c1}"><div><div class="kicker">${esc(KIND_LABEL[KIND] || '')}${A?.testId ? ` · Test ID ${esc(A.testId)}` : ''}</div>
+      <h1>${esc(A?.title || 'Assignment')}</h1>
+      <div class="meta">${A ? `<a href="class.html?c=${S.key}">${esc(S.short)}</a>` : ''}${A?.teacher ? `<span>${esc(A.teacher)}</span>` : ''}${A?.due ? `<span>Due ${fmtDateTime(A.due)}</span>` : ''}</div></div>
+      <div>${pill ?? (A ? statusPill(A) : '')}</div></section>`;
+}
+const callout = (tone, ic, html) => `<div class="callout ${tone}">${icon(ic, 18)}<div>${html}</div></div>`;
+const facts = rows => `<dl class="facts">${rows.filter(([, v]) => has(v)).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+
+if (!IN_APP) {
+  C.innerHTML = hero() + `<div class="layout"><div class="card panel">${callout('', 'external', `This page needs the openLMS server. ${A ? extLink(A.link, 'Open on Indus LMS', 'btn') : ''}`)}</div></div>`;
+  return;
+}
+if (!ID || !['eol', 'fa', 'sa', 'task'].includes(KIND)) {
+  C.innerHTML = `<div class="card empty-state"><b>Nothing to show</b>This link is missing the assignment. <a class="rowlink" href="index.html">Back to Home</a></div>`;
+  return;
+}
+C.innerHTML = hero() + `<div class="layout"><div class="stack"><div class="card panel">${skeleton(5)}</div></div><div class="card panel">${skeleton(4)}</div></div>`;
+const fail = e => { C.innerHTML = hero() + `<div class="layout"><div class="card panel">${callout('bad', 'alert', esc(e.message))}<div class="actions"><button class="btn ghost" onclick="location.reload()">Try again</button></div></div></div>`; };
+const reload = () => { revalidate(); load(); };
+const donePill = (score, total, late) => `${has(score) ? `<span class="pill green">${icon('check', 12)} ${+score}${has(total) ? '/' + +total : ''}</span>` : `<span class="pill cyan">${icon('check', 12)} Turned in</span>`}${late ? ' <span class="pill red">Late</span>' : ''}`;
+
+/* ---------- File picker shared by every hand-in form ---------- */
+function picker(id, label = 'Add files') {
+  return `<label class="drop" id="${id}"><input type="file" multiple>${icon('upload', 20)}<span>${label}</span><span class="hint">Up to 10 files, 25 MB each</span></label><div class="chosen" id="${id}-list"></div>`;
+}
+function wirePicker(id) {
+  const zone = document.getElementById(id), input = zone.querySelector('input'), list = document.getElementById(`${id}-list`), files = [];
+  const draw = () => { list.innerHTML = files.map((f, i) => { const k = fileKind(f.name); return `<div><span class="ftype-sm" style="background:${k.color}">${k.label}</span>${esc(f.name)} <span class="hint">${(f.size / 1048576).toFixed(1)} MB</span><button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">${icon('x', 14)}</button></div>`; }).join(''); };
+  const add = list => { for (const f of list) { if (f.size > 25 * 1048576) toast(`${f.name} is larger than 25 MB.`, 'err'); else if (files.length < 10) files.push(f); } draw(); };
+  input.onchange = () => { add(input.files); input.value = ''; };
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('over'); };
+  zone.ondragleave = () => zone.classList.remove('over');
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove('over'); add(e.dataTransfer.files); };
+  list.onclick = e => { const b = e.target.closest('[data-rm]'); if (b) { files.splice(+b.dataset.rm, 1); draw(); } };
+  return files;
+}
+async function send(btn, work) {
+  btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending…';
+  try { return await work(); }
+  catch (e) { toast(e.message, 'err'); return null; }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+
+/* ---------- EOL: result view, start screen and the attempt ---------- */
+const exitKey = id => `openlms.eol-exits.${id}`;
+const localExits = id => { try { return +localStorage.getItem(exitKey(id)) || 0; } catch { return 0; } };
+const setExits = (id, n) => { try { n ? localStorage.setItem(exitKey(id), String(n)) : localStorage.removeItem(exitKey(id)); } catch {} };
+
+function questionResult(q, n) {
+  const verdict = q.isCorrect ? '<span class="pill green">Correct</span>' : q.selected ? '<span class="pill red">Incorrect</span>' : '<span class="pill grey">Not answered</span>';
+  return `<article class="q"><header><span>Question ${n}</span><span>${verdict}${has(q.awarded) ? ` <span class="pill grey">${+q.awarded} mark${+q.awarded === 1 ? '' : 's'}</span>` : ''}</span></header>
+    <div class="prose">${q.html}</div>${q.image ? `<img class="qimg" src="${esc(q.image)}" alt="">` : ''}
+    <ul class="opts">${q.options.map(o => {
+      const cls = o.key === q.correct ? 'correct' : o.key === q.selected ? 'wrong' : '';
+      const tag = o.key === q.correct ? (o.key === q.selected ? 'Your answer · correct' : 'Correct answer') : o.key === q.selected ? 'Your answer' : '';
+      return `<li class="opt ${cls}"><span class="k">${o.key}</span><div class="prose">${o.html}${o.image ? `<img class="qimg" src="${esc(o.image)}" alt="">` : ''}</div>${tag ? `<span class="tag">${tag}</span>` : ''}</li>`;
+    }).join('')}</ul>
+    ${q.note ? `<div class="note"><b>${icon('note', 14)} AI learning note</b>${esc(q.note)}</div>` : `<div class="explain"><button class="btn ghost ext" data-explain="${esc(q.id)}">${icon('note', 14)} Explain this question</button></div>`}</article>`;
+}
+function eolView(d) {
+  const t = d.test, max = t.exitMax || 3, used = Math.max(t.exits || 0, localExits(t.id)), left = Math.max(0, max - used);
+  const done = !!d.result || !!t.submitted;
+  let main;
+  if (d.result) {
+    const r = d.result, pct = Math.round(+r.percentage || (+r.score / +r.total * 100) || 0);
+    main = `<div class="card panel"><h2>Your result</h2><div class="score"><div class="big">${+r.score}<small>/${+r.total}</small></div>
+        <div class="bar"><span style="width:${pct}%;background:${pct >= 70 ? 'var(--done)' : pct >= 50 ? 'var(--accent)' : 'var(--late)'}"></span></div><b>${pct}%</b></div>
+        <p class="hint" style="margin:10px 0 0">Submitted ${fmtDateTime(r.submittedAt || t.submitted)}</p></div>
+      <div class="card panel"><h2>Questions</h2>${r.responses.map((q, i) => questionResult(q, i + 1)).join('') || '<p class="muted">No answers recorded.</p>'}</div>`;
+  } else if (done) {
+    main = `<div class="card panel">${callout('good', 'check', `Submitted ${fmtDateTime(t.submitted)}. Your teacher hasn’t released the answers yet.`)}</div>`;
+  } else {
+    let state;
+    if (t.suspended) state = callout('bad', 'lock', 'This test was stopped because the page was left during the attempt. Contact your teacher to reopen it.');
+    else if (t.blocked || left <= 0) state = callout('bad', 'lock', 'All attempts used. Contact your teacher if you need another try.');
+    else if (t.expired || (t.due && new Date(t.due) < new Date())) state = callout('bad', 'clock', esc(t.expiresMessage || 'This test has closed.'));
+    else if (!t.canAttempt) state = callout('warn', 'clock', esc(t.opensMessage || 'This test isn’t open yet.'));
+    main = `<div class="card panel"><h2>Ready when you are</h2>${state || `
+      <ul class="rules"><li>Your teacher gives you the passcode.</li><li>Answer every question before you submit. You can move back and forth freely.</li>
+        <li>Stay on this page. Switching tabs or apps is reported to your teacher, and the test stops on the fourth time.</li>
+        <li>Closing the test without submitting uses one attempt. You have <b>${left} of ${max}</b> left.</li></ul>
+      <button class="btn" id="take">${icon('lock', 15, 'style="vertical-align:-2px"')} Take test</button>`}</div>`;
+  }
+  const fb = (d.feedback || []).map(f => `<div class="fb"><div class="prose">${esc(f.feedback_text || f.text || f.comment || '')}</div><span class="hint">${esc(f.teacher_name || f.created_by_name || '')} ${f.created_at ? '· ' + fmtDate(f.created_at) : ''}</span></div>`).join('');
+  C.innerHTML = hero(done ? donePill(d.result?.score, d.result?.total) : undefined) + `<div class="layout"><div class="stack">${main}${fb ? `<div class="card panel"><h2>Teacher feedback</h2>${fb}</div>` : ''}</div>
+    <div class="card panel"><h2>Details</h2>${facts([['Test ID', esc(t.testId)], ['Teacher', esc(t.teacher)], ['Opens', t.opens ? fmtDateTime(t.opens) : ''], ['Closes', t.due ? fmtDateTime(t.due) : ''],
+      ['Attempts', done ? '' : `${left} of ${max} left`], ['Marks', esc(t.total ? +t.total : '')], ['Marking', esc(titleCase(t.marking || ''))]])}</div></div>`;
+  document.getElementById('take')?.addEventListener('click', () => takeTest(t));
+  C.querySelectorAll('[data-explain]').forEach(b => b.onclick = async () => {
+    const box = b.parentElement;
+    b.disabled = true; b.textContent = 'Thinking…';
+    try { const r = await api(`eol/${encodeURIComponent(t.id)}/explain`, { method: 'POST', json: { question_id: b.dataset.explain } }); box.outerHTML = `<div class="note"><b>${icon('note', 14)} AI learning note</b>${esc(r.explanation || 'No explanation available.')}</div>`; }
+    catch (e) { b.disabled = false; b.textContent = 'Explain this question'; toast(e.message, 'err'); }
+  });
+}
+
+function passcodeDialog(t) {
+  return new Promise(resolve => {
+    const d = document.createElement('dialog');
+    d.className = 'dlg';
+    d.innerHTML = `<form><h2>Enter the test passcode</h2><div class="dlg-body"><p>${esc(t.title)} · ${esc(t.testId)}</p>
+      <label class="field"><span>Passcode</span><input type="password" name="pass" autocomplete="off" required></label>
+      <p class="hint" style="margin-top:8px">Don’t share your passcode. Ask your teacher if the test won’t open.</p><p class="err-text" id="pc-err" hidden></p></div>
+      <div class="dlg-actions"><button class="btn ghost" type="button" value="cancel">Cancel</button><button class="btn" type="submit">Start test</button></div></form>`;
+    document.body.appendChild(d);
+    const form = d.querySelector('form'), err = d.querySelector('#pc-err'), go = form.querySelector('[type=submit]');
+    let result = null;
+    form.querySelector('[value=cancel]').onclick = () => d.close();
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const pass = form.pass.value.trim(); if (!pass) return;
+      go.disabled = true; go.textContent = 'Opening…'; err.hidden = true;
+      try {
+        const test = await api('eol/open', { method: 'POST', json: { short_id: t.testId, passcode: pass } });
+        result = { test, pass }; d.close();
+      } catch (ex) { err.textContent = ex.message; err.hidden = false; go.disabled = false; go.textContent = 'Start test'; }
+    };
+    d.addEventListener('close', () => { d.remove(); resolve(result); });
+    d.showModal();
+  });
+}
+async function takeTest(t) {
+  const opened = await passcodeDialog(t);
+  if (!opened) return;
+  if (opened.test.alreadySubmitted) { toast('You have already submitted this test.'); return reload(); }
+  runAttempt(t, opened.test, opened.pass);
+}
+function runAttempt(row, test, passcode) {
+  const box = document.getElementById('attempt'), Q = test.questions, answers = {}, max = row.exitMax || 3;
+  let i = 0, violations = 0, finished = false;
+  const ctl = new AbortController(), sig = { signal: ctl.signal };
+  const answered = () => Q.filter(q => answers[q.id]).length;
+  function draw() {
+    const q = Q[i], all = answered() === Q.length;
+    box.innerHTML = `<div class="top"><h2 id="attempt-title">${esc(test.title || row.title)}</h2><small>${answered()} of ${Q.length} answered</small><button class="x" id="leave">Leave test</button></div>
+      <div class="warnbar" id="warn" hidden></div>
+      <nav class="dots" aria-label="Questions">${Q.map((x, n) => `<button class="${answers[x.id] ? 'done' : ''} ${n === i ? 'on' : ''}" data-go="${n}" aria-label="Question ${n + 1}${answers[x.id] ? ', answered' : ''}">${n + 1}</button>`).join('')}</nav>
+      <div class="body"><div class="card"><div class="count"><span>Question ${i + 1} of ${Q.length}</span><span>${q.marks ? `${+q.marks} mark${+q.marks === 1 ? '' : 's'}` : ''}${answers[q.id] ? '' : ' · ⚠ Not answered'}</span></div>
+        <div class="qtext prose">${q.html}</div>${q.image ? `<img class="qimg" src="${esc(q.image)}" alt="">` : ''}
+        <div class="opts" role="radiogroup" aria-label="Answer">${q.options.map(o => `<label class="choice"><input type="radio" name="ans" value="${o.key}" ${answers[q.id] === o.key ? 'checked' : ''}><span class="k">${o.key}</span><div class="prose">${o.html}${o.image ? `<img class="qimg" src="${esc(o.image)}" alt="">` : ''}</div></label>`).join('')}</div></div></div>
+      <div class="foot"><button class="btn ghost" id="prev" ${i === 0 ? 'disabled' : ''}>Previous</button>
+        <span class="hint">${all ? 'All questions answered.' : `Answer all ${Q.length} questions to submit.`}</span>
+        ${i < Q.length - 1 ? `<button class="btn ghost" id="next">Next</button>` : ''}<button class="btn" id="submit" ${all ? '' : 'disabled'}>Submit</button></div>`;
+    box.querySelector('.opts').onchange = e => { answers[q.id] = e.target.value; const keep = i; if (i < Q.length - 1 && !answers[Q[i + 1].id]) i++; draw(); if (keep === i) box.querySelector('input:checked')?.focus(); };
+    box.querySelector('.dots').onclick = e => { const b = e.target.closest('[data-go]'); if (b) { i = +b.dataset.go; draw(); } };
+    box.querySelector('#prev').onclick = () => { i--; draw(); };
+    box.querySelector('#next') && (box.querySelector('#next').onclick = () => { i++; draw(); });
+    box.querySelector('#submit').onclick = submit;
+    box.querySelector('#leave').onclick = leave;
+  }
+  function warn(text) { const w = box.querySelector('#warn'); if (w) { w.textContent = text; w.hidden = false; } }
+  const behind = [...document.body.children].filter(el => el !== box && el.tagName !== 'SCRIPT');
+  function close() { finished = true; ctl.abort(); box.hidden = true; box.innerHTML = ''; document.body.style.overflow = ''; behind.forEach(el => { el.inert = false; }); }
+  async function leave() {
+    const used = Math.max(row.exits || 0, localExits(row.id)) + 1;
+    const ok = await confirmDialog({ title: 'Leave without submitting?', danger: true, confirm: 'Leave test', cancel: 'Keep going',
+      html: `<p>Your answers won’t be saved and this uses one attempt. ${used >= max ? '<b>This is your last attempt.</b>' : `You’ll have ${max - used} left.`}</p>` });
+    if (!ok) return;
+    setExits(row.id, used);
+    close();
+    toast(used >= max ? 'All attempts used. Contact your teacher.' : `You left the test without submitting. ${max - used} attempt${max - used === 1 ? '' : 's'} left.`, used >= max ? 'err' : 'info');
+    reload();
+  }
+  async function submit() {
+    const ok = await confirmDialog({ title: 'Submit your answers?', confirm: 'Submit',
+      html: `<p>You answered ${answered()} of ${Q.length} questions. You can’t change your answers after submitting.</p>` });
+    if (!ok) return;
+    const btn = box.querySelector('#submit'); btn.disabled = true; btn.textContent = 'Submitting…';
+    try {
+      const res = await api(`eol/${encodeURIComponent(test.id)}/submit`, { method: 'POST', json: { passcode, answers } });
+      setExits(row.id, 0);
+      close();
+      toast(`Submitted: ${+res.score}/${+res.total}${res.percent ? ` (${Math.round(+res.percent)}%)` : ''}`);
+      // Show the result straight from the submit reply; lists refresh in the background.
+      if (res.result) { eolView({ test: { ...row, status: 'submitted', submitted: res.submittedAt || new Date().toISOString() }, result: res.result, feedback: [] }); revalidate(); }
+      else reload();
+    } catch (e) {
+      // Never re-sent automatically: the student decides whether to try again.
+      btn.disabled = false; btn.textContent = 'Submit';
+      toast(`${e.message} Your answers are still here; nothing was submitted twice.`, 'err');
+    }
+  }
+  async function terminate(text) {
+    close(); toast(text, 'err'); reload();
+  }
+  // Proctoring parity with Indus LMS: leaving the page is reported; the LMS stops the test at its threshold.
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden || finished) return;
+    try {
+      const r = await api(`eol/${encodeURIComponent(test.id)}/proctor`, { method: 'POST', json: { event_type: 'document_visibility_hidden' } });
+      violations = r.violations ?? violations + 1;
+      if (r.suspended || violations >= r.threshold) return terminate('Suspicious activity noticed. This test has been terminated.');
+      warn(`Warning ${violations}/${r.threshold - 1}: Do not switch tabs or leave this page during the test.`);
+    } catch {
+      violations++;
+      if (violations >= 4) return terminate('Suspicious activity noticed. This test has been terminated.');
+      warn(`Warning ${violations}/3: Do not switch tabs or leave this page during the test.`);
+    }
+  }, sig);
+  ['copy', 'cut', 'paste', 'contextmenu'].forEach(t => box.addEventListener(t, e => { e.preventDefault(); if (t !== 'contextmenu') toast('Copy and paste are not allowed during the test.', 'info'); }, sig));
+  addEventListener('keydown', e => {
+    if (finished) return;
+    if (e.key === 'Escape') { e.preventDefault(); leave(); }
+    const k = e.key.toLowerCase();
+    if (!e.metaKey && !e.ctrlKey && /^[a-d]$/.test(k) && Q[i].options.some(o => o.key === k)) { answers[Q[i].id] = k; draw(); }
+    if (e.key === 'ArrowRight' && i < Q.length - 1) { i++; draw(); }
+    if (e.key === 'ArrowLeft' && i > 0) { i--; draw(); }
+  }, sig);
+  addEventListener('beforeunload', e => { if (!finished) { e.preventDefault(); e.returnValue = ''; } }, sig);
+  addEventListener('pagehide', () => { if (!finished) setExits(row.id, Math.max(row.exits || 0, localExits(row.id)) + 1); }, sig);
+  document.body.style.overflow = 'hidden';
+  behind.forEach(el => { el.inert = true; });
+  box.hidden = false;
+  box.tabIndex = -1;
+  draw();
+  box.focus();
+}
+
+/* ---------- FA / SA ---------- */
+function faView(d) {
+  const a = d.assignment || d.assessment, sub = d.submission, fb = d.feedback, rq = d.requests || {};
+  const graded = /graded|evaluated/i.test(a.status || '');
+  const canSubmit = !sub && !a.submitted && !graded && a.submissionOpen !== false;
+  const canResubmit = sub && rq.resubmission_window_open;
+  const due = rq.effective_due_date || a.due;
+  const main = [];
+  main.push(`<div class="card panel"><h2>Instructions</h2>${a.instructions ? `<div class="prose">${a.instructions}</div>` : '<p class="muted">No instructions.</p>'}${fileChips([...(a.files || []), ...(a.questionFile || [])])}</div>`);
+  if (fb) main.push(`<div class="card panel"><h2>Feedback ${has(fb.score) ? `<span class="pill green">${+fb.score}${a.total ? '/' + +a.total : ''}</span>` : ''}</h2>
+    ${fb.html ? `<div class="prose">${fb.html}</div>` : ''}${fb.remarks ? `<div class="prose" style="margin-top:8px">${fb.remarks}</div>` : ''}
+    ${fb.rubric?.length ? `<table class="rubric"><thead><tr><th>Criterion</th><th>Score</th></tr></thead><tbody>${fb.rubric.map(r => `<tr><td>${esc(r.criterion || r.name || r.label || '')}</td><td><b>${esc(r.score ?? r.value ?? '')}</b></td></tr>`).join('')}</tbody></table>` : ''}
+    ${fileChips(fb.files)}${!fb.html && !fb.remarks && !fb.rubric?.length && !fb.files?.length ? '<p class="muted">Graded. No written comments.</p>' : ''}</div>`);
+  if (sub) main.push(`<div class="card panel"><h2>Your submission</h2><p class="hint" style="margin:0">Handed in ${fmtDateTime(sub.submittedAt)}${due && sub.submittedAt && new Date(sub.submittedAt) > new Date(due) ? ' · <span class="pill red">Late</span>' : ''}</p>
+    ${fileChips(sub.files, '<p class="muted">No files.</p>')}${sub.comment ? `<p style="margin:10px 0 0">${esc(sub.comment)}</p>` : ''}
+    ${canResubmit ? `<form id="resub" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px"><h2 style="font-size:15px">Resubmit</h2>
+      ${(sub.files || []).map((f, n) => `<label class="keep"><input type="checkbox" name="keep" value="${n}" checked> Keep ${esc(f.name)}</label>`).join('')}
+      <div class="field">${picker('rpick', 'Add new files')}</div><label class="field"><span>Comment (optional)</span><textarea name="comment" maxlength="2000"></textarea></label>
+      <div class="actions"><button class="btn" type="submit">Resubmit</button></div></form>` : ''}</div>`);
+  if (canSubmit) {
+    const qs = a.questions || [];
+    main.push(`<form class="card panel" id="handin"><h2>Hand in</h2>${qs.length ? qs.map((q, n) => `<div class="q"><header><span>Question ${n + 1}</span>${q.marks ? `<span>${+q.marks} marks</span>` : ''}</header><div class="prose">${q.html}</div>
+        ${q.type === 'mcq' ? `<div class="opts">${q.options.map(o => `<label class="choice"><input type="radio" name="q-${esc(q.id)}" value="${esc(o.key)}"><span class="k">${esc(o.key)}</span><div class="prose">${o.html}</div></label>`).join('')}</div>`
+          : `<label class="field"><span>Your answer</span><textarea name="q-${esc(q.id)}"></textarea></label>`}</div>`).join('') : ''}
+      <div class="field"><span>${qs.length ? 'Attach working (optional)' : 'Your work'}</span>${picker('fpick', qs.length ? 'Add files' : 'Choose or drop your files')}</div>
+      <label class="field"><span>Comment for your teacher (optional)</span><textarea name="comment" maxlength="2000"></textarea></label>
+      <div class="actions"><button class="btn" type="submit">${icon('send', 15, 'style="vertical-align:-2px"')} Hand in</button></div></form>`);
+  } else if (!sub && !graded) {
+    main.push(`<div class="card panel">${callout('warn', 'lock', 'Submissions are closed for this assessment.')}</div>`);
+  }
+  // can_request.{extension,resubmission} is {ok, code, message}; latest holds the newest request of each type.
+  const may = k => { const v = rq.can_request?.[k]; return v === true || !!(v && v.ok); };
+  const why = k => { const v = rq.can_request?.[k]; return v && v.ok === false && v.message ? v.message : ''; };
+  const latest = rq.latest && typeof rq.latest === 'object' && !rq.latest.status && !rq.latest.id
+    ? Object.entries(rq.latest).filter(([, v]) => v).map(([k, v]) => ({ request_type: k, ...v }))
+    : rq.latest ? [rq.latest] : [];
+  const reqCard = r => `<div class="req-latest"><b>${esc(titleCase(r.request_type || 'Request'))}</b>${r.status ? ` · <span class="pill ${/approved|accepted/i.test(r.status) ? 'green' : /rejected|declined|cancel/i.test(r.status) ? 'red' : 'amber'}">${esc(titleCase(String(r.status).replace(/_/g, ' ')))}</span>` : ''}
+      ${r.reason ? `<p style="margin:6px 0 0">${esc(r.reason)}</p>` : ''}${r.preferred_due_at ? `<p class="hint" style="margin:4px 0 0">Asked for ${fmtDateTime(r.preferred_due_at)}</p>` : ''}${r.decided_due_at || r.new_due_date ? `<p class="hint" style="margin:4px 0 0">New deadline ${fmtDateTime(r.decided_due_at || r.new_due_date)}</p>` : ''}
+      ${/pending/i.test(r.status || '') && r.id ? `<div class="actions"><button class="btn ghost" data-cancel="${esc(r.id)}">Withdraw request</button></div>` : ''}</div>`;
+  const notes = ['extension', 'resubmission'].filter(k => !may(k) && why(k)).map(k => `<p class="hint" style="margin:8px 0 0">${esc(why(k))}</p>`).join('');
+  const reqPanel = !rq.enabled ? '' : `<div class="card panel"><h2>Extensions & resubmissions</h2><p class="hint" style="margin:0">${rq.requests_used ?? 0} of ${rq.requests_max ?? 3} requests used${rq.extended ? ' · deadline extended' : ''}</p>
+    ${latest.map(reqCard).join('')}
+    ${may('extension') || may('resubmission') ? `<div class="actions">${may('extension') ? '<button class="btn ghost" data-ask="extension">Ask for an extension</button>' : ''}${may('resubmission') ? '<button class="btn ghost" data-ask="resubmission">Ask to resubmit</button>' : ''}</div>` : notes}
+    <form id="askform" hidden><label class="field"><span id="ask-label">Reason</span><textarea name="reason" minlength="${rq.min || 10}" maxlength="${rq.max || 500}" required></textarea></label>
+      <label class="field" id="ask-due"><span>Preferred new deadline (optional)</span><input type="datetime-local" name="due"></label>
+      <div class="actions"><button class="btn" type="submit">Send request</button><button class="btn ghost" type="button" id="ask-cancel">Cancel</button></div></form></div>`;
+  C.innerHTML = hero(turnedIn ? donePill(graded ? (fb?.score ?? a.marks) : null, a.total, sub && due && new Date(sub.submittedAt) > new Date(due)) : undefined) + `<div class="layout"><div class="stack">${main.join('')}</div><div class="stack">
+    <div class="card panel"><h2>Details</h2>${facts([['Type', esc([a.type, a.category].filter(has).join(' · '))], ['Teacher', esc(a.teacher)], ['Due', due ? fmtDateTime(due) : 'No deadline'],
+      ['Status', esc(titleCase((a.status || '').replace(/_/g, ' ')))], ['Marks', has(a.marks) ? `${+a.marks}/${+a.total}` : a.total ? `Out of ${+a.total}` : ''], ['Set', a.assigned ? fmtDate(a.assigned) : '']])}</div>${reqPanel}</div></div>`;
+
+  const handin = document.getElementById('handin');
+  if (handin) {
+    const files = wirePicker('fpick');
+    handin.onsubmit = async e => {
+      e.preventDefault();
+      const qs = a.questions || [], responses = [];
+      for (const q of qs) {
+        const v = q.type === 'mcq' ? handin.querySelector(`[name="q-${CSS.escape(q.id)}"]:checked`)?.value : handin.querySelector(`[name="q-${CSS.escape(q.id)}"]`)?.value.trim();
+        if (!v) return toast(`Answer question ${qs.indexOf(q) + 1} first.`, 'err');
+        responses.push(q.type === 'mcq' ? { question_id: q.id, selected_option: v } : { question_id: q.id, answer_text: v });
+      }
+      if (!qs.length && !files.length) return toast('Attach your work first.', 'err');
+      const ok = await confirmDialog({ title: `Hand in ${a.title}?`, confirm: 'Hand in',
+        html: `<p>${qs.length ? `${qs.length} answer${qs.length === 1 ? '' : 's'}` : ''}${qs.length && files.length ? ' and ' : ''}${files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''} will be sent to your teacher.</p>` });
+      if (!ok) return;
+      const form = new FormData();
+      form.append('comment', handin.comment.value.trim());
+      form.append('responses', JSON.stringify(responses));
+      files.forEach(f => form.append('files', f));
+      const out = await send(handin.querySelector('[type=submit]'), () => api(`fa/${encodeURIComponent(a.id)}/submit`, { method: 'POST', form }));
+      if (out) { toast('Handed in.'); reload(); }
+    };
+  }
+  const resub = document.getElementById('resub');
+  if (resub) {
+    const files = wirePicker('rpick');
+    resub.onsubmit = async e => {
+      e.preventDefault();
+      const keep = [...resub.querySelectorAll('[name=keep]:checked')].map(x => +x.value);
+      if (!keep.length && !files.length) return toast('Keep or add at least one file.', 'err');
+      if (!await confirmDialog({ title: 'Resubmit your work?', confirm: 'Resubmit', html: `<p>Keeping ${keep.length} file${keep.length === 1 ? '' : 's'}, adding ${files.length}.</p>` })) return;
+      const form = new FormData();
+      form.append('keep', JSON.stringify(keep)); form.append('comment', resub.comment.value.trim()); form.append('base_submitted_at', sub.submittedAt || '');
+      files.forEach(f => form.append('files', f));
+      const out = await send(resub.querySelector('[type=submit]'), () => api(`fa/${encodeURIComponent(a.id)}/resubmit`, { method: 'POST', form }));
+      if (out) { toast('Resubmitted.'); reload(); }
+    };
+  }
+  const askform = document.getElementById('askform');
+  let askType = null;
+  C.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => {
+    askType = b.dataset.ask; askform.hidden = false;
+    document.getElementById('ask-label').textContent = askType === 'extension' ? 'Why do you need more time?' : 'Why do you want to resubmit?';
+    document.getElementById('ask-due').hidden = askType !== 'extension';
+    askform.reason.focus();
+  });
+  document.getElementById('ask-cancel')?.addEventListener('click', () => { askform.hidden = true; });
+  askform?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const reason = askform.reason.value.trim();
+    if (reason.length < (rq.min || 10)) return toast(`Give a reason of at least ${rq.min || 10} characters.`, 'err');
+    if (!await confirmDialog({ title: askType === 'extension' ? 'Ask for an extension?' : 'Ask to resubmit?', confirm: 'Send request', html: `<p>Your teacher will see: “${esc(reason)}”</p>` })) return;
+    const dueVal = askform.due.value ? new Date(askform.due.value).toISOString() : null;
+    const out = await send(askform.querySelector('[type=submit]'), () => api(`fa/${encodeURIComponent(a.id)}/request`, { method: 'POST', json: { request_type: askType, reason, preferred_due_at: dueVal } }));
+    if (out) { toast('Request sent to your teacher.'); reload(); }
+  });
+  C.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+    if (!await confirmDialog({ title: 'Withdraw this request?', confirm: 'Withdraw', danger: true })) return;
+    const out = await send(b, () => api(`requests/${encodeURIComponent(b.dataset.cancel)}/cancel`, { method: 'POST' }));
+    if (out) { toast('Request withdrawn.'); reload(); }
+  });
+}
+
+/* ---------- Learning task ---------- */
+function taskView(t) {
+  const done = !!t.submission || /submitted|graded|completed/i.test(t.status || '');
+  const main = [`<div class="card panel"><h2>Instructions</h2>${t.instructions ? `<div class="prose">${t.instructions}</div>` : '<p class="muted">No instructions.</p>'}${fileChips(t.attachments)}</div>`];
+  if (has(t.score) || t.grade || t.feedback) main.push(`<div class="card panel"><h2>Feedback ${has(t.score) ? `<span class="pill green">${esc(t.score)}</span>` : ''}${t.grade ? ` <span class="pill grey">${esc(t.grade)}</span>` : ''}</h2>${t.feedback ? `<div class="prose">${t.feedback}</div>` : '<p class="muted">No written comments.</p>'}</div>`);
+  if (t.submission) main.push(`<div class="card panel"><h2>Your submission</h2><p class="hint" style="margin:0">Handed in ${fmtDateTime(t.submission.submittedAt)}</p>${fileChips(t.submission.files)}${t.submission.text ? `<p style="margin:10px 0 0">${esc(t.submission.text)}</p>` : ''}</div>`);
+  else if (!done) main.push(`<form class="card panel" id="taskform"><h2>Hand in</h2>${t.due && new Date(t.due) < new Date() ? callout('warn', 'clock', `The deadline was ${fmtDateTime(t.due)}. You can still hand in; it will show as late.`) : ''}
+      <div class="field"><span>Your work</span>${picker('tpick', 'Choose or drop your files')}</div>
+      <label class="field"><span>Note for your teacher (optional)</span><textarea name="text" maxlength="2000"></textarea></label>
+      <div class="actions"><button class="btn" type="submit">${icon('send', 15, 'style="vertical-align:-2px"')} Hand in</button></div></form>`);
+  C.innerHTML = hero(done ? donePill(t.score, null, t.submission && t.due && new Date(t.submission.submittedAt) > new Date(t.due)) : undefined) + `<div class="layout"><div class="stack">${main.join('')}</div>
+    <div class="card panel"><h2>Details</h2>${facts([['Subject', esc(t.subject)], ['Due', t.due ? fmtDateTime(t.due) : 'No deadline'], ['Status', esc(titleCase((t.status || '').replace(/_/g, ' ')))], ['Teacher', esc(A?.teacher)]])}</div></div>`;
+  const form = document.getElementById('taskform');
+  if (form) {
+    const files = wirePicker('tpick');
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (!files.length) return toast('Attach at least one file.', 'err');
+      if (!await confirmDialog({ title: `Hand in ${t.title}?`, confirm: 'Hand in', html: `<p>${files.length} file${files.length === 1 ? '' : 's'} will be sent to your teacher.</p>` })) return;
+      const body = new FormData();
+      body.append('text', form.text.value.trim());
+      files.forEach(f => body.append('files', f));
+      const out = await send(form.querySelector('[type=submit]'), () => api(`tasks/${encodeURIComponent(t.id)}/submit`, { method: 'POST', form: body }));
+      if (out) { toast('Handed in.'); reload(); }
+    };
+  }
+}
+
+async function load() {
+  try {
+    if (KIND === 'eol') eolView(await api(`eol/${encodeURIComponent(ID)}`));
+    else if (KIND === 'task') taskView(await api(`tasks/${encodeURIComponent(ID)}`));
+    else faView(await api(`fa/${encodeURIComponent(ID)}`));
+  } catch (e) { fail(e); }
+}
+load();
+}, { detail: true });
+</script>
+</body></html>

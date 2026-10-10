@@ -6,23 +6,27 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
-  body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); background: var(--surface); }
-  .panel { background: #12302D; color: #C9D8D5; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; }
-  .panel .brand { padding: 0; font-size: 20px; }
-  .panel h2 { color: #fff; font-size: 30px; font-weight: 800; line-height: 1.2; max-width: 420px; }
+  body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--surface); }
+  .panel { position: relative; overflow: hidden; color: #BFD3CF; padding: 48px; display: flex; flex-direction: column; justify-content: space-between;
+    background: radial-gradient(700px 360px at 100% 0%, rgba(232,163,61,.16), transparent 70%), linear-gradient(160deg, #0D3A35 0%, #0F4A44 55%, #12807A 140%); }
+  .panel::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 280px; pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='280' viewBox='0 0 600 280'%3E%3Cg fill='none' stroke='%2318A097' stroke-opacity='.4' stroke-width='1.4'%3E%3Cpath d='M0 120c50-30 100 30 150 0s100 30 150 0 100 30 150 0 100 30 150 0'/%3E%3Cpath d='M0 160c50-30 100 30 150 0s100 30 150 0 100 30 150 0 100 30 150 0'/%3E%3Cpath d='M0 200c50-30 100 30 150 0s100 30 150 0 100 30 150 0 100 30 150 0'/%3E%3Cpath d='M0 240c50-30 100 30 150 0s100 30 150 0 100 30 150 0 100 30 150 0'/%3E%3C/g%3E%3C/svg%3E") left bottom / 600px 280px repeat-x; }
+  .panel > * { position: relative; z-index: 1; }
+  .panel .brand { padding: 0; font-size: 22px; }
+  .panel h2 { color: #fff; font-size: clamp(32px, 3.6vw, 48px); font-weight: 700; line-height: 1.05; letter-spacing: -0.03em; max-width: 12ch; }
   .panel ul { padding: 0; list-style: none; margin: 24px 0 0; display: grid; gap: 12px; }
   .panel li { display: flex; gap: 10px; align-items: center; font-weight: 600; }
   .panel li svg { color: var(--accent); flex: none; }
-  .panel small { color: #7E9C97; }
+  .panel small { color: #7FA9A2; max-width: 52ch; }
   .form-wrap { display: grid; place-items: center; padding: 32px 20px; }
   form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 16px; }
-  form h1 { font-size: 24px; font-weight: 800; }
+  form h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
   form p { margin: 0; color: var(--muted); font-weight: 600; }
   label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 13px; color: var(--ink-2); }
-  input { font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; outline: none; background: #fff; color: var(--ink); }
-  input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+  input { font: inherit; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; outline: none; background: #fff; color: var(--ink); }
+  input:focus { border-color: var(--brand); box-shadow: 0 0 0 4px rgba(18,128,122,.14); }
   form .btn { padding: 12px; font-size: 15px; }
   form .btn[disabled] { opacity: .6; cursor: wait; }
   .error { display: none; background: var(--late-soft); color: #B23434; border-radius: 8px; padding: 10px 12px; font-weight: 600; font-size: 13px; }
@@ -52,7 +56,7 @@
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit" id="submit">Sign in</button>
     <p class="note">Your password is sent to Indus LMS to sign you in and is never stored by openLMS.
-      Submitting work and taking tests still happen on Indus LMS; openLMS takes you to the right page.</p>
+      Tests, hand-ins and messages you send here go straight to Indus LMS.</p>
     <div class="or"><span>or</span></div>
     <a class="btn ghost demo" href="api/demo">Explore with demo data</a>
   </form>
@@ -78,7 +82,7 @@ form.onsubmit = async e => {
       document.getElementById('hello').textContent = `Welcome, ${(name || '').split(' ')[0] || 'back'}`;
       document.body.classList.add('busy');
       const msg = document.getElementById('loadmsg');
-      const steps = ['Loading your classes…', 'Merging assignments…', 'Fetching resources…', 'Checking calendar…', 'Almost there…'];
+      const steps = ['Loading your classes…', 'Merging assignments…', 'Checking calendar…', 'Almost there…'];
       let i = 0;
       const timer = setInterval(() => { msg.textContent = steps[i++ % steps.length]; }, 1200);
       try {

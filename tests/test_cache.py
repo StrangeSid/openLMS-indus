@@ -54,7 +54,8 @@ class DataCacheTest(unittest.TestCase):
             side_effect=lambda tok, tid, live=True, files=None: {"live": live, "tok": tok},
         ).start()
         self.tree = mock.patch.object(server, "resource_tree", return_value=[]).start()
-        self.post = mock.patch.object(server.requests, "post").start()
+        self.post = mock.patch.object(server.http, "post").start()
+        mock.patch.object(server, "_spawn", lambda fn: fn()).start()  # background crawl runs inline
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(server.sessions.close)
 
@@ -89,7 +90,7 @@ class DataCacheTest(unittest.TestCase):
     def test_sections_filter(self):
         self.sign_in()
         r = self.client.get("/data.js", params={"sections": "calendar"})
-        body = r.text[len("window.LMS = "):].rstrip().rstrip(";")
+        body = r.text[len("window.LMS = "):].split(";window.LMS_ETAG")[0]
         data = json.loads(body)
         self.assertIn("live", data)
         self.assertNotIn("tok", data)
