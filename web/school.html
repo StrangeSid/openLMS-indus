@@ -1,0 +1,79 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>School · openLMS</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<style>
+  main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 48px; max-width: 1180px; }
+  .head h1 { font-size: clamp(26px, 3vw, 34px); }
+  .head p { margin: 4px 0 18px; color: var(--muted); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 20px; align-items: start; }
+  .panel { padding: 20px; }
+  .panel h2 { font-size: 18px; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .panel h2 .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-ink); }
+  .panel > p { margin: 0 0 12px; color: var(--muted); font-size: 13px; font-weight: 600; }
+  .doc { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .doc:first-of-type { border-top: 0; }
+  .doc .ftype-sm { min-width: 38px; height: 44px; border-radius: 8px; font-size: 10px; }
+  .doc div { flex: 1; min-width: 0; }
+  .doc b { display: block; font-size: 14px; }
+  .doc small { color: var(--muted); font-weight: 600; font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  details.help { border-top: 1px solid var(--line); padding: 10px 0; }
+  details.help summary { cursor: pointer; font-weight: 700; }
+</style></head>
+<body>
+<div class="with-side">
+  <main>
+    <div class="head"><h1>School</h1><p>Policies, reports and help from Indus, in one place.</p></div>
+    <div class="grid">
+      <section class="card panel"><h2><span class="ic" id="ic-pol"></span>School policies</h2><p>Current versions published by the school.</p><div id="policies"></div></section>
+      <section class="card panel"><h2><span class="ic" id="ic-rep"></span>Progress reports</h2><p>Report cards appear here once the school publishes them.</p><div id="reports"></div></section>
+      <section class="card panel"><h2><span class="ic" id="ic-help"></span>Help</h2><p>Guides for students.</p><div id="help"></div></section>
+    </div>
+  </main>
+</div>
+<script src="assets/cache.js"></script>
+<script>__lmsBoot()</script>
+<script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
+<script src="assets/app.js"></script>
+<script>
+page(() => {
+mountChrome('school', null, 'Search policies…');
+document.getElementById('ic-pol').innerHTML = icon('shield', 18);
+document.getElementById('ic-rep').innerHTML = icon('report', 18);
+document.getElementById('ic-help').innerHTML = icon('help', 18);
+const box = id => document.getElementById(id);
+if (!IN_APP) {
+  [['policies', '/school-policies'], ['reports', '/studentprogressreport'], ['help', '/help']].forEach(([id, path]) => { box(id).innerHTML = extLink(lmsUrl(path), 'Open on Indus LMS'); });
+  return;
+}
+['policies', 'reports', 'help'].forEach(id => { box(id).innerHTML = skeleton(3); });
+const empty = (title, text) => `<div class="empty-state" style="padding:22px 8px"><b>${title}</b>${text}</div>`;
+const doc = (title, sub, url) => {
+  const k = fileKind((url || 'x.pdf').split('?')[0]);
+  const inner = `<span class="ftype-sm" style="background:${k.color}">${k.label}</span><div><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+  return url ? `<a class="doc" href="${esc(url)}" target="_blank" rel="noopener">${inner}${icon('external', 14)}</a>` : `<div class="doc">${inner}</div>`;
+};
+let policies = [];
+function drawPolicies(q = '') {
+  const list = policies.filter(p => !q || `${p.title} ${p.description}`.toLowerCase().includes(q));
+  box('policies').innerHTML = list.map(p => doc(p.title, [p.description, p.version && `Version ${p.version}`].filter(Boolean).join(' · '), p.url)).join('')
+    || empty(q ? 'No matches' : 'No policies yet', q ? 'Try another word.' : 'The school hasn’t published any.');
+}
+api('policies').then(p => { policies = p; drawPolicies(); }).catch(e => { box('policies').innerHTML = `<p class="err-text">${esc(e.message)}</p>`; });
+api('reports').then(r => {
+  box('reports').innerHTML = r.reports.map(x => doc(x.title, [x.term, x.at && fmtDate(x.at, { day: 'numeric', month: 'short', year: 'numeric' })].filter(Boolean).join(' · '), x.url)).join('')
+    || empty('No reports published yet', `${esc(D.programCode || 'DP')} reports will show up here as soon as they are released.`);
+}).catch(e => { box('reports').innerHTML = `<p class="err-text">${esc(e.message)}</p>`; });
+api('help').then(h => {
+  box('help').innerHTML = h.map(x => `<details class="help"><summary>${esc(x.title)}</summary>${x.html ? `<div class="prose" style="margin-top:8px">${x.html}</div>` : ''}${x.url ? `<p><a class="rowlink" href="${esc(x.url)}" target="_blank" rel="noopener">Open guide</a></p>` : ''}</details>`).join('')
+    || empty('No help articles yet', 'Questions about a class? <a class="rowlink" href="messages.html">Message your teacher</a>.');
+}).catch(e => { box('help').innerHTML = `<p class="err-text">${esc(e.message)}</p>`; });
+document.getElementById('q').oninput = e => drawPolicies(e.target.value.trim().toLowerCase());
+}, { detail: true });
+</script>
+</body></html>

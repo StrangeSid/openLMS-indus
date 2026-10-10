@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
   .content { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 40px; }
   .banner { position: relative; overflow: hidden; border-radius: 24px; padding: 28px 30px 24px; color: #fff; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; min-height: 176px;
@@ -65,10 +65,11 @@
   <section class="content" id="content"></section>
 </div>
 <script src="assets/cache.js"></script>
-<script src="data.js"></script>
+<script>__lmsBoot()</script>
 <script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
+page(() => {
 const params = new URLSearchParams(location.search);
 const course = D.courses.find(c => subj(c.title).key === params.get('c')) || D.courses[0];
 const S = subj(course.title), K = S.key;
@@ -78,17 +79,12 @@ mountChrome(null, K, `Search in ${S.short}…`);
 const anns = D.announcements.filter(a => subj(a.subject).key === K);
 const work = assignments().filter(a => subj(a.subject).key === K);
 let files = D.resources.filter(r => subj(r.subject).key === K);
-// Hot-swap for the stale-resources banner (see library.html).
+// Files load in the background on the server (see library.html).
 window.__lmsRefreshResources = async () => {
-  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
-  if (!r.ok) return false;
-  const data = await r.json();
-  D.resources = data.resources || [];
-  D.resourcesStale = !!data.resourcesStale;
-  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  if (!await fetchResources()) return false;
   files = D.resources.filter(x => subj(x.subject).key === K);
   render();
-  return !D.resourcesStale;
+  return !D.resourcesStale && !D.resourcesPending;
 };
 let tab = params.get('tab') || 'stream', seg = 'upcoming', q = '';
 const count = st => work.filter(a => a.state === st).length;
@@ -96,7 +92,7 @@ const count = st => work.filter(a => a.state === st).length;
 function stream() {
   return `<div class="grid"><div>${anns.map(a => `
     <article class="card post"><header><span class="avatar" style="background:${S.c1}">${initials(a.by)}</span><div><b>${esc(a.by)}</b><br><span>${fmtDate(a.at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span></div></header>
-    <h3>${esc(a.title)}</h3><p>${esc(a.message)}</p>${a.files ? `<span class="attach">${icon('file', 14)} ${a.files} attachment${a.files > 1 ? 's' : ''}</span>` : ''}</article>`).join('') || '<div class="card empty">No posts in this class yet</div>'}</div>
+    <h3>${esc(a.title)}</h3>${a.html ? `<div class="prose">${a.html}</div>` : `<p>${esc(a.message)}</p>`}${Array.isArray(a.files) ? fileChips(a.files) : a.files ? `<span class="attach">${icon('file', 14)} ${a.files} attachment${a.files > 1 ? 's' : ''}</span>` : ''}</article>`).join('') || '<div class="card empty">No posts in this class yet</div>'}</div>
     <div class="card info" style="padding:16px;align-self:start"><div class="section-title">About this class</div>
       <dl><dt>Teacher</dt><dd>${esc(course.teacher || '—')}</dd><dt>Level</dt><dd>${esc(course.level || '—')}</dd><dt>Code</dt><dd>${esc(course.code || '—')}</dd></dl>
       <div class="mini"><div><b>${count('upcoming')}</b><span>Upcoming</span></div><div><b>${count('done')}</b><span>Done</span></div><div><b style="color:var(--late)">${count('late')}</b><span>Late</span></div></div></div></div>`;
@@ -105,7 +101,7 @@ function work_() {
   const list = work.filter(a => a.state === seg).sort((a, b) => new Date(a.due || a.assigned) - new Date(b.due || b.assigned));
   if (seg !== 'upcoming') list.reverse();
   return `<div class="seg">${['upcoming', 'done', 'late'].map(s => `<button data-seg="${s}" class="${seg === s ? 'on' : ''}">${s[0].toUpperCase() + s.slice(1)} · ${count(s)}</button>`).join('')}</div>
-    <div class="card">${list.map(a => `<div class="task"><div><b>${esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}${a.testId ? ' · Test ID ' + esc(a.testId) : ''}</small></div>${statusPill(a)}${actionFor(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
+    <div class="card">${list.map(a => `<div class="task"><div><b>${IN_APP && a.id ? `<a class="rowlink" href="${detailHref(a)}">${esc(a.title)}</a>` : esc(a.title)}</b><small>${esc(a.kind)} · ${a.state === 'done' ? 'Turned in ' + fmtDate(a.submitted || a.assigned) : a.due ? 'Due ' + fmtDate(a.due, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Set ' + fmtDate(a.assigned)}${a.testId ? ' · Test ID ' + esc(a.testId) : ''}</small></div>${statusPill(a)}${actionFor(a)}</div>`).join('') || '<div class="empty">Nothing here</div>'}</div>`;
 }
 function resources() {
   const folders = {};
@@ -120,7 +116,7 @@ function render() {
     <div class="banner" style="--subj:${S.c1}">
       <div class="who"><span class="badge"><svg width="40" height="40" viewBox="0 0 40 40">${glyphSvg(S.glyph, S.c1, 20, 20, 22)}</svg></span>
         <div><span class="level">${esc(D.programCode)}${course.level ? ' ' + esc(course.level) : ''}</span><h1>${esc(course.title)}</h1><p>${esc(course.teacher || '')}</p></div></div>
-      ${course.id ? extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS') : ''}</div>
+      ${course.id && !IN_APP ? extLink(lmsUrl(`/assignments?courseId=${course.id}${course.classId ? '&classId=' + course.classId : ''}`), 'Open on Indus LMS') : ''}</div>
     <div class="ctabs">${[['stream', 'Stream', anns.length], ['work', 'Assignments', work.length], ['files', 'Resources', files.length]].map(([k, l, n]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}<span class="n">${n}</span></button>`).join('')}</div>
     ${tab === 'stream' ? stream() : tab === 'work' ? work_() : resources()}`;
 }
@@ -131,5 +127,6 @@ document.getElementById('content').onclick = e => {
   if (s) { seg = s.dataset.seg; render(); }
 };
 document.getElementById('q').oninput = e => { q = e.target.value.toLowerCase(); if (tab !== 'files') tab = 'files'; render(); };
+});
 </script>
 </body></html>

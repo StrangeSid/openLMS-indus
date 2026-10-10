@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
   main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px); }
   .head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -56,10 +56,11 @@
 </div>
 <aside class="drawer" id="drawer"></aside>
 <script src="assets/cache.js"></script>
-<script src="data.js"></script>
+<script>__lmsBoot()</script>
 <script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
+page(() => {
 mountChrome('files', null, `Search ${D.resources.length} files by name, teacher, folder…`);
 let R, subjects, types;
 function reindex() {
@@ -72,18 +73,13 @@ function reindex() {
 }
 let fSubj = 'all', fType = 'all', view = 'grid', q = '';
 reindex();
-// Hot-swap for the stale-resources banner: refresh just the files slice
-// and re-render in place. Resolves true when resources are current.
+// Files load in the background on the server; swap them in when ready
+// (or recrawl when stale). Resolves true when resources are current.
 window.__lmsRefreshResources = async () => {
-  const r = await fetch('api/data?refresh=1&sections=resources,resourcesStale', { cache: 'no-store' });
-  if (!r.ok) return false;
-  const data = await r.json();
-  D.resources = data.resources || [];
-  D.resourcesStale = !!data.resourcesStale;
-  try { window.__lmsSave && window.__lmsSave(D); } catch (e) {}
+  if (!await fetchResources()) return false;
   reindex();
   render();
-  return !D.resourcesStale;
+  return !D.resourcesStale && !D.resourcesPending;
 };
 function chips() {
   document.getElementById('chips').innerHTML = `<button class="chip ${fSubj === 'all' ? 'on' : ''}" data-s="all" style="${fSubj === 'all' ? 'color:var(--brand)' : ''}">All subjects</button>` +
@@ -107,7 +103,7 @@ function open(r) {
     <h3 style="font-size:18px">${esc(r.title)}</h3>
     <dl><dt>Subject</dt><dd>${esc(titleCase(r.subject))}</dd><dt>Folder</dt><dd>${esc(r.folder || '—')}</dd><dt>Teacher</dt><dd>${esc(r.teacher || '—')}</dd><dt>File</dt><dd style="word-break:break-all">${esc(r.name)}</dd></dl>
     ${r.path ? `<a class="btn" style="text-align:center" href="${encodeURI(r.path)}" target="_blank">Open file</a>` : ''}
-    ${extLink(resourceLinkFor(r.subject), 'View on Indus LMS')}</div>`;
+    ${r.path ? '' : extLink(resourceLinkFor(r.subject), 'View on Indus LMS')}</div>`;
   d.classList.add('open');
   document.getElementById('x').onclick = () => d.classList.remove('open');
 }
@@ -117,8 +113,9 @@ document.addEventListener('click', e => {
   else if (t) { fType = t.dataset.t; render(); }
   else if (v) { view = v.dataset.v; document.querySelectorAll('[data-v]').forEach(b => b.classList.toggle('on', b === v)); render(); }
   else if (it) open(R[+it.dataset.i]);
-});
+}, { signal: pageSignal() });
 document.getElementById('q').oninput = e => { q = e.target.value.toLowerCase(); render(); };
 render();
+});
 </script>
 </body></html>

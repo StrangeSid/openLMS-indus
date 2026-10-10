@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
   body { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--surface); }
   .panel { position: relative; overflow: hidden; color: #BFD3CF; padding: 48px; display: flex; flex-direction: column; justify-content: space-between;
@@ -56,7 +56,7 @@
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn" type="submit" id="submit">Sign in</button>
     <p class="note">Your password is sent to Indus LMS to sign you in and is never stored by openLMS.
-      Submitting work and taking tests still happen on Indus LMS; openLMS takes you to the right page.</p>
+      Tests, hand-ins and messages you send here go straight to Indus LMS.</p>
     <div class="or"><span>or</span></div>
     <a class="btn ghost demo" href="api/demo">Explore with demo data</a>
   </form>
@@ -82,7 +82,7 @@ form.onsubmit = async e => {
       document.getElementById('hello').textContent = `Welcome, ${(name || '').split(' ')[0] || 'back'}`;
       document.body.classList.add('busy');
       const msg = document.getElementById('loadmsg');
-      const steps = ['Loading your classes…', 'Merging assignments…', 'Fetching resources…', 'Checking calendar…', 'Almost there…'];
+      const steps = ['Loading your classes…', 'Merging assignments…', 'Checking calendar…', 'Almost there…'];
       let i = 0;
       const timer = setInterval(() => { msg.textContent = steps[i++ % steps.length]; }, 1200);
       try {

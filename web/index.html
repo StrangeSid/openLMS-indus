@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="assets/app.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
   main { padding: clamp(18px, 2.2vw, 40px) clamp(18px, 2.4vw, 44px) 48px; display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 440px); gap: clamp(20px, 2vw, 36px); }
 
@@ -152,10 +152,11 @@
   </main>
 </div>
 <script src="assets/cache.js"></script>
-<script src="data.js"></script>
+<script>__lmsBoot()</script>
 <script>window.LMS || (window.__lmsLoad && window.__lmsLoad()) || document.write('<script src="assets/data.example.js"><\/script>')</script>
 <script src="assets/app.js"></script>
 <script>
+page(() => {
 mountChrome('home');
 const A = assignments();
 const DAY = 86400000;
@@ -236,8 +237,10 @@ function pickDay(i) {
 document.getElementById('days').addEventListener('click', e => {
   const t = e.target.closest('[data-day]'); if (t) pickDay(+t.dataset.day);
 });
-new ResizeObserver(() => renderPlot()).observe(document.getElementById('chart'));
-narrow.addEventListener('change', () => { if (dayFilter !== null && dayFilter >= span()) dayFilter = null; renderRiver(); render(); });
+const ro = new ResizeObserver(() => renderPlot());
+ro.observe(document.getElementById('chart'));
+onTeardown(() => ro.disconnect());
+narrow.addEventListener('change', () => { if (dayFilter !== null && dayFilter >= span()) dayFilter = null; renderRiver(); render(); }, { signal: pageSignal() });
 
 /* Assignments */
 const TABS = { upcoming: 'Upcoming', done: 'Done', late: 'Late' };
@@ -287,7 +290,7 @@ function render() {
       const s = subj(a.subject);
       const when = tab === 'done' ? `Turned in ${fmtDate(a.submitted || a.assigned)}` : a.due ? `${a.state === 'late' ? 'Was due' : 'Due'} ${fmtTime(a.due)}` : `Set ${fmtDate(a.assigned)}`;
       return `<div class="row">${tile(a)}
-        <div style="min-width:0"><h3 title="${esc(a.title)}">${esc(a.title)}</h3>
+        <div style="min-width:0"><h3 title="${esc(a.title)}">${IN_APP && a.id ? `<a class="rowlink" href="${detailHref(a)}">${esc(a.title)}</a>` : esc(a.title)}</h3>
           <div class="facts"><a class="subject" href="class.html?c=${s.key}" style="color:${s.c1}"><i style="background:${s.c1}"></i>${esc(s.short)}</a>
           <span>${esc(a.kind)}</span><span>${when}</span>${a.testId ? `<span class="testid">Test ID <strong>${esc(a.testId)}</strong></span>` : ''}</div></div>
         <div class="right">${statusPill(a)}${actionFor(a)}</div></div>`;
@@ -304,15 +307,16 @@ document.getElementById('tabs').onclick = e => {
 document.getElementById('day-clear').onclick = () => { dayFilter = null; renderRiver(); render(); };
 document.getElementById('cls').onchange = e => { cls = e.target.value; render(); };
 document.getElementById('sort').onchange = e => { sort = e.target.value; render(); };
-document.getElementById('q').oninput = e => {
-  const q = e.target.value.toLowerCase();
-  document.querySelectorAll('#list .row').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');
-};
+const search = q => document.querySelectorAll('#list .row').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');
+document.getElementById('q').oninput = e => search(e.target.value.toLowerCase());
+const asked = new URLSearchParams(location.search).get('q'); // from the search box on detail pages
+if (asked) { document.getElementById('q').value = asked; search(asked.toLowerCase()); }
 
 document.getElementById('events').innerHTML = D.calendar.filter(e => e.date >= iso(TODAY)).slice(0, 5).map(e => `
   <div class="event"><div class="date"><small>${fmtDate(e.date, { month: 'short' })}</small><b>${new Date(e.date).getDate()}</b></div>
   <div><strong>${esc(e.label)}</strong><span>${e.type === 'no_school' ? 'No school' : titleCase((e.type || '').replace('_', ' '))}</span></div></div>`).join('') || '<span class="muted">Nothing scheduled</span>';
 document.getElementById('anns').innerHTML = D.announcements.slice(0, 3).map(a => `
-  <a class="ann" href="${lmsUrl('/announcement')}" target="_blank" rel="noopener"><strong>${esc(a.title)}</strong>${a.message ? `<p>${esc(a.message)}</p>` : ''}<span>${esc(a.by)}, ${ago(a.at)}</span></a>`).join('') || '<span class="muted">No announcements</span>';
+  <a class="ann" href="${IN_APP && a.id ? `updates.html?tab=ann#ann-${encodeURIComponent(a.id)}` : lmsUrl('/announcement')}" ${IN_APP ? '' : 'target="_blank" rel="noopener"'}><strong>${esc(a.title)}</strong>${a.message ? `<p>${esc(a.message)}</p>` : ''}<span>${esc(a.by)}, ${ago(a.at)}</span></a>`).join('') || '<span class="muted">No announcements</span>';
+});
 </script>
 </body></html>
