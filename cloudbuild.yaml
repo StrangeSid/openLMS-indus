@@ -60,3 +60,34 @@ steps:
       # Secret must exist: openssl rand -base64 32 | gcloud secrets create
       #   openlms-secret --data-file=-   (plus secretAccessor for the
       #   Cloud Run service identity). Fernet-encrypts session tokens at rest.
+
+  # Purge Cloudflare edge cache so new HTML/JS go live together.
+  # Without this, Cloudflare serves stale .js against fresh .html after
+  # every deploy (it caches by extension, not headers) and the console
+  # fills with "not defined" errors. Needs the secret below (one-time):
+  #   Cloudflare dashboard > My Profile > API Tokens > Create custom token:
+  #     Zone / Cache Purge / Purge, scoped to sidevv.xyz, then
+  #   Google Cloud console > Secret Manager > Create secret
+  #     'cloudflare-cache-token' with the token as its value.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        ZONE=$(curl -s -H "Authorization: Bearer $$CF_CACHE_TOKEN" \
+          "https://api.cloudflare.com/client/v4/zones?name=sidevv.xyz" \
+          | python3 -c "import sys,json; print(json.load(sys.stdin)['result'][0]['id'])")
+        curl -s -X POST -H "Authorization: Bearer $$CF_CACHE_TOKEN" \
+          -H "Content-Type: application/json" \
+          "https://api.cloudflare.com/client/v4/zones/$$ZONE/purge_cache" \
+          -d '{"purge_everything":true}' \
+          | python3 -c "import sys,json; sys.exit(0 if json.load(sys.stdin).get('success') else 1)"
+    secretEnv:
+      - CF_CACHE_TOKEN
+
+# Secrets used above (referenced as projects/$PROJECT_ID/.../latest).
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/cloudflare-cache-token/versions/latest
+      env: CF_CACHE_TOKEN
