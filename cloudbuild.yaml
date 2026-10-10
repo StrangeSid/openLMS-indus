@@ -1,0 +1,53 @@
+# Continuous deploy: push to main -> build image -> deploy to Cloud Run.
+# One-time setup:
+#   gcloud artifacts repositories create openlms \
+#     --repository-format=docker --location=asia-southeast1
+#   Connect this repo in Cloud Build > Triggers, trigger on push to ^main$,
+#   using this file as the build config.
+# Note: the service lives in asia-southeast1 (Singapore) because Cloud Run
+# domain mappings aren't supported in asia-south1 (Mumbai).
+substitutions:
+  _AR_LOCATION: asia-southeast1
+  _SERVICE: openlms
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - '$_AR_LOCATION-docker.pkg.dev/$PROJECT_ID/openlms/openlms:$COMMIT_SHA'
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_AR_LOCATION-docker.pkg.dev/$PROJECT_ID/openlms/openlms:$COMMIT_SHA'
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - '$_SERVICE'
+      - '--image'
+      - '$_AR_LOCATION-docker.pkg.dev/$PROJECT_ID/openlms/openlms:$COMMIT_SHA'
+      - '--region'
+      - asia-southeast1
+      - '--platform'
+      - managed
+      - '--allow-unauthenticated'
+      - '--max-instances'
+      - '1'
+      - '--min-instances'
+      - '1'
+      - '--memory'
+      - 512Mi
+      - '--cpu'
+      - '1'
+      - '--set-env-vars'
+      - 'OPENLMS_PUBLIC_HOST=lms.sidevv.xyz'
+      - '--set-secrets'
+      - 'OPENLMS_SECRET_KEY=openlms-secret:latest'
+      # Secret must exist: openssl rand -base64 32 | gcloud secrets create
+      #   openlms-secret --data-file=-   (plus secretAccessor for the
+      #   Cloud Run service identity). Fernet-encrypts session tokens at rest.
